@@ -8,6 +8,7 @@ import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
 import { KRSCompany, FinancialData } from '@/types';
 import { verifyContent } from './content-verifier';
+import { findIndustryTemplate, generateIndustryRisks, UNIVERSAL_RISKS } from '../utils/industry-templates';
 
 // Typ dla parametrów oferty
 export interface OfferParameters {
@@ -311,6 +312,12 @@ PARAMETRY OFERTY (podane przez użytkownika - użyj tych konkretnych wartości!)
     // Najnowsze dane finansowe do użycia w promptach
     const fin = financials.length > 0 ? financials[financials.length - 1] : null;
 
+    // Ryzyka branżowe na podstawie PKD
+    const industryTemplate = company.pkdPrzewazajace ? findIndustryTemplate(company.pkdPrzewazajace) : null;
+    const industryRisksText = industryTemplate
+        ? `RYZYKA SPECYFICZNE DLA BRANŻY (${industryTemplate.name}):\n${generateIndustryRisks(industryTemplate)}\n\nUWAGA: Użyj POWYŻSZYCH ryzyk branżowych i dostosuj je do konkretnej sytuacji Spółki!`
+        : `RYZYKA UNIWERSALNE:\n${UNIVERSAL_RISKS.slice(0, 7).map((r, i) => `${i + 1}. ${r}`).join('\n')}`;
+
     const companyData = `
 DANE SPÓŁKI (z odpisu KRS):
 - Pełna nazwa: ${company.nazwa}
@@ -372,35 +379,28 @@ ${subsectionsText}
 
 ${FORMATTING_RULES}
 
+${industryRisksText}
+
 KLUCZOWE INSTRUKCJE - AUTOMATYCZNA OCENA RYZYK:
-Na podstawie danych finansowych SAMODZIELNIE oceń i opisz ryzyka. NIE używaj [DO UZUPELNIENIA]!
+Na podstawie danych finansowych SAMODZIELNIE ocen i opisz ryzyka. NIE uzywaj [DO UZUPELNIENIA]!
 
-ANALIZA DANYCH (uzyj konkretnych liczb):
-- Jesli zobowiazania > 0 i stanowia wiecej niz 30% bilansu = opisz ryzyko zadluzenia z konkretnymi wartosciami
-- Jesli zobowiazania = 0 lub brak kredytow = napisz "Spolka nie posiada zobowiazan oprocentowanych, dlatego ryzyko stopy procentowej nie dotyczy Spolki"
-- Jesli przychody rosna = napisz o pozytywnym trendzie, jesli spadaja = opisz ryzyko spadku przychodow z konkretnymi procentami
+ANALIZA DANYCH FINANSOWYCH (uzyj konkretnych liczb):
+- Przychody: ${fin?.przychodyNetto?.toLocaleString('pl-PL') || 0} PLN
+- Zysk netto: ${fin?.zyskNetto?.toLocaleString('pl-PL') || 0} PLN
+- Aktywa obrotowe: ${fin?.aktywaObrotowe?.toLocaleString('pl-PL') || 0} PLN
+- Zobowiazania: ${fin?.zobowiazania?.toLocaleString('pl-PL') || 0} PLN
+- Kapital wlasny: ${fin?.kapitalWlasny?.toLocaleString('pl-PL') || 0} PLN
 
-SZCZEGOLOWE WYMAGANIA:
-- §11 (minimum 5 ryzyk operacyjnych):
-  * Ryzyko konkurencji w branzy (opisz na podstawie PKD spolki)
-  * Ryzyko utraty kluczowych pracownikow (zatrudnienie: ${fin?.zatrudnienie || 'brak danych'})
-  * Ryzyko zmian technologicznych
-  * Ryzyko regulacyjne
-  * Ryzyko uzaleznienia od kluczowych klientow
-  
-- §12 (minimum 4 ryzyka finansowe) - KONKRETNA OCENA:
-  * Ryzyko plynnosci: aktywa obrotowe ${fin?.aktywaObrotowe || 0} PLN vs zobowiazania ${fin?.zobowiazania || 0} PLN
-  * Ryzyko walutowe: opisz czy Spolka prowadzi dzialalnosc miedzynarodowa (jesli brak informacji - napisz ze nie dotyczy)
-  * Ryzyko stopy procentowej: JESLI zobowiazania sa niskie lub zerowe - napisz "Spolka nie posiada istotnych zobowiazan oprocentowanych zmienną stopą, dlatego ryzyko stopy procentowej jest ograniczone"
-  * Ryzyko kredytowe: ocen na podstawie struktury bilansowej
-  
-- §13 (minimum 4 ryzyka inwestycyjne):
-  * Ryzyko zmiennosci kursu akcji
-  * Ryzyko ograniczonej plynnosci obrotu
-  * Ryzyko rozwodnienia
-  * Ryzyko niedojscia emisji do skutku
+KONKRETNE WSKAZNIKI (oblicz i uzyj w opisach):
+- Wskaznik zadluzenia: ${fin?.sumaBilansowa ? ((fin.zobowiazania / fin.sumaBilansowa) * 100).toFixed(1) : '?'}%
+- Rentownosc netto: ${fin?.przychodyNetto ? ((fin.zyskNetto / fin.przychodyNetto) * 100).toFixed(1) : '?'}%
 
-UWAGA: Kazde ryzyko opisz w 3-5 zdaniach uzywajac KONKRETNYCH danych liczbowych ze sprawozdania!`,
+STRUKTURA SEKCJI:
+- §11 (5+ ryzyk operacyjnych - UŻyj RYZYK BRANŻOWYCH z góry!)
+- §12 (4+ ryzyka finansowe - użyj KONKRETNYCH wskaźników!)
+- §13 (4+ ryzyka inwestycyjne)
+
+Kazde ryzyko opisz w 3-5 zdaniach z konkretnymi liczbami!`,
 
         offer: `Napisz rozdział IV. DANE O OFERCIE AKCJI zgodnie z Dz.U. 2020.1053.
 

@@ -6,6 +6,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { generateProfessionalPDF } from '@/lib/documents/pdfmake-generator';
 import { KRSCompany, FinancialData } from '@/types';
 import { OfferParameters } from '@/lib/ai/streaming-generator';
+import { postProcessContent } from '@/lib/utils/post-processing';
 
 export async function POST(request: NextRequest) {
     try {
@@ -24,7 +25,16 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const pdfBytes = await generateProfessionalPDF(content, company, financials || [], offerParams);
+        // Post-processing treści przed generowaniem PDF
+        const fin = financials?.length > 0 ? financials[financials.length - 1] : null;
+        const processedContent = postProcessContent(content, {
+            companyName: company.nazwa,
+            pkd: company.pkdPrzewazajace,
+            hasExport: false, // TODO: wyciągnąć z danych
+            hasLoans: (fin?.zobowiazania || 0) > 0,
+        });
+
+        const pdfBytes = await generateProfessionalPDF(processedContent, company, financials || [], offerParams);
 
         return new NextResponse(Buffer.from(pdfBytes), {
             headers: {
