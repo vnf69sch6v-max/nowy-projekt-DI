@@ -43,6 +43,30 @@ function sanitize(text: string): string {
 }
 
 /**
+ * Usuwa podwójny spis treści z treści AI
+ */
+function removeDuplicateTOC(text: string): string {
+    // Usuń sekcję "Spis tresci" z treści AI (zachowujemy tylko wbudowany w PDF)
+    let result = text;
+
+    // Wzorce spisu treści które AI może wygenerować
+    const tocPatterns = [
+        /Spis\s+tres[c]?i\s*\n[\s\S]*?(?=\n[IVX]+\.\s|MEMORANDUM|$)/gi,
+        /^Spis\s+tres[c]?i[\s\S]*?(?=\n\n\n|\nI\.\s)/gim,
+        /Table\s+of\s+Contents[\s\S]*?(?=\n\n)/gi,
+    ];
+
+    for (const pattern of tocPatterns) {
+        result = result.replace(pattern, '');
+    }
+
+    // Usuń nadmiarowe puste linie
+    result = result.replace(/\n{4,}/g, '\n\n\n');
+
+    return result.trim();
+}
+
+/**
  * Formatuje PLN
  */
 function formatPLN(value: number | null | undefined): string {
@@ -71,7 +95,7 @@ export async function generateProfessionalPDF(
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
     const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
-    const cleanContent = sanitize(content);
+    const cleanContent = removeDuplicateTOC(sanitize(content));
     const companyName = sanitize(company.nazwa || 'Spolka');
     const today = new Date().toLocaleDateString('pl-PL');
 
@@ -503,7 +527,79 @@ export async function generateProfessionalPDF(
                 currentPage.drawRectangle({ x: MARGIN + 100, y: y + 3, width: 10, height: 8, color: rgb(0.3, 0.7, 0.4) });
                 currentPage.drawText('Zysk netto', { x: MARGIN + 115, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
 
-                y -= 20;
+                y -= 30;
+
+                // ========================================
+                // DASHBOARD KLUCZOWYCH WSKAZNIKOW (karty)
+                // ========================================
+
+                if (financials.length > 0) {
+                    const latestFin = financials[financials.length - 1];
+                    const prevFin = financials.length > 1 ? financials[financials.length - 2] : null;
+
+                    const cardWidth = (CONTENT_WIDTH - 20) / 3;
+                    const cardHeight = 50;
+
+                    // Sprawdzenie miejsca na stronie
+                    if (y < MARGIN + cardHeight + 30) {
+                        addPageFooter(currentPage, pageNum, font);
+                        currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                        y = PAGE_HEIGHT - MARGIN;
+                        pageNum++;
+                    }
+
+                    // Karta 1: Przychody
+                    currentPage.drawRectangle({
+                        x: MARGIN, y: y - cardHeight,
+                        width: cardWidth, height: cardHeight,
+                        color: rgb(0.95, 0.97, 1), borderColor: rgb(0.8, 0.85, 0.95), borderWidth: 1,
+                    });
+                    currentPage.drawText('PRZYCHODY', { x: MARGIN + 10, y: y - 15, size: 8, font, color: rgb(0.4, 0.4, 0.5) });
+                    currentPage.drawText(`${((latestFin.przychodyNetto || 0) / 1000000).toFixed(1)} mln PLN`, {
+                        x: MARGIN + 10, y: y - 35, size: 12, font: fontBold, color: rgb(0.2, 0.3, 0.5)
+                    });
+                    // Trend
+                    if (prevFin && prevFin.przychodyNetto) {
+                        const growth = ((latestFin.przychodyNetto - prevFin.przychodyNetto) / prevFin.przychodyNetto) * 100;
+                        const trendColor = growth >= 0 ? rgb(0.2, 0.6, 0.3) : rgb(0.7, 0.2, 0.2);
+                        const trendText = growth >= 0 ? `+${growth.toFixed(1)}%` : `${growth.toFixed(1)}%`;
+                        currentPage.drawText(trendText, { x: MARGIN + cardWidth - 40, y: y - 35, size: 10, font: fontBold, color: trendColor });
+                    }
+
+                    // Karta 2: Zysk netto
+                    currentPage.drawRectangle({
+                        x: MARGIN + cardWidth + 10, y: y - cardHeight,
+                        width: cardWidth, height: cardHeight,
+                        color: rgb(0.95, 1, 0.97), borderColor: rgb(0.8, 0.95, 0.85), borderWidth: 1,
+                    });
+                    currentPage.drawText('ZYSK NETTO', { x: MARGIN + cardWidth + 20, y: y - 15, size: 8, font, color: rgb(0.4, 0.5, 0.4) });
+                    const zyskVal = (latestFin.zyskNetto || 0) / 1000000;
+                    const zyskColor = zyskVal >= 0 ? rgb(0.2, 0.5, 0.3) : rgb(0.6, 0.2, 0.2);
+                    currentPage.drawText(`${zyskVal.toFixed(1)} mln PLN`, {
+                        x: MARGIN + cardWidth + 20, y: y - 35, size: 12, font: fontBold, color: zyskColor
+                    });
+
+                    // Karta 3: Kapital wlasny / Zadluzenie
+                    currentPage.drawRectangle({
+                        x: MARGIN + 2 * cardWidth + 20, y: y - cardHeight,
+                        width: cardWidth, height: cardHeight,
+                        color: rgb(1, 0.98, 0.95), borderColor: rgb(0.95, 0.9, 0.8), borderWidth: 1,
+                    });
+                    currentPage.drawText('KAPITAL WLASNY', { x: MARGIN + 2 * cardWidth + 30, y: y - 15, size: 8, font, color: rgb(0.5, 0.45, 0.4) });
+                    currentPage.drawText(`${((latestFin.kapitalWlasny || 0) / 1000000).toFixed(1)} mln PLN`, {
+                        x: MARGIN + 2 * cardWidth + 30, y: y - 35, size: 12, font: fontBold, color: rgb(0.4, 0.35, 0.3)
+                    });
+                    // Wskaznik zadluzenia
+                    if (latestFin.sumaBilansowa && latestFin.sumaBilansowa > 0) {
+                        const debtRatio = ((latestFin.zobowiazania || 0) / latestFin.sumaBilansowa) * 100;
+                        const debtColor = debtRatio < 50 ? rgb(0.3, 0.6, 0.3) : rgb(0.6, 0.3, 0.2);
+                        currentPage.drawText(`Zadl. ${debtRatio.toFixed(0)}%`, {
+                            x: MARGIN + 2 * cardWidth + cardWidth - 50, y: y - 35, size: 9, font, color: debtColor
+                        });
+                    }
+
+                    y -= cardHeight + 20;
+                }
             }
         }
 

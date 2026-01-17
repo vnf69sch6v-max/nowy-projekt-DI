@@ -188,17 +188,30 @@ export function generateTableOfContents(): string {
 // ============================================
 
 const FORMATTING_RULES = `
-FORMATOWANIE - ŚCISŁE ZASADY:
-1. NIE używaj markdown: ##, **, *, \`\`\`
-2. NIE rysuj tabel ASCII z użyciem znaków |, -, +, ═, ─
-3. Dane liczbowe podawaj w formacie: "Przychody za 2025 rok: 12 119 801,76 PLN"
-4. Używaj numeracji: 1., 1.1., 1.1.1.
-5. Daty w formacie: DD.MM.YYYY
-6. Kwoty w formacie: X XXX XXX,XX PLN
-7. Gdzie brak konkretnych danych, wpisz [DO UZUPEŁNIENIA]
-8. Pisz profesjonalnym językiem prawniczym
-9. Powołuj się na przepisy (KSH, ustawa o ofercie publicznej)
-10. Każdy paragraf (§) rozpisuj szczegółowo
+FORMATOWANIE - SCISLE ZASADY:
+1. NIE uzywaj markdown: ##, **, *, \`\`\`
+2. NIE rysuj tabel ASCII z uzyciem znakow |, -, +
+3. Dane liczbowe: "Przychody za 2025 rok: 12 119 801,76 PLN"
+4. Daty w formacie: DD.MM.YYYY
+5. Kwoty w formacie: X XXX XXX,XX PLN
+6. Gdzie brak danych: [DO UZUPELNIENIA]
+7. Pisz profesjonalnym jezykiem prawniczym
+
+NUMERACJA - SCISLA HIERARCHIA:
+- Glowne sekcje: I., II., III., IV. (rzymskie, bez powtarzania)
+- Podsekcje (paragrafy): §11., §12., §13. (symbol paragrafu)
+- Punkty wewnatrz: 1., 2., 3. (arabskie)
+- Podpunkty: a), b), c) lub 1.1., 1.2., 1.3.
+
+PRZYKLAD PRAWIDLOWEJ STRUKTURY:
+II. CZYNNIKI RYZYKA
+§11. Czynniki ryzyka zwiazane z dzialalnoscia emitenta
+1. Ryzyko konkurencji
+   Opis ryzyka...
+2. Ryzyko utraty pracownikow
+   Opis ryzyka...
+
+NIE ZACZYNAJ OD "Spis tresci" - jest juz wbudowany w PDF!
 `;
 
 // ============================================
