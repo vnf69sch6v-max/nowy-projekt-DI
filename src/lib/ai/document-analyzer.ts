@@ -60,14 +60,44 @@ export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany>
         });
 
         const text = response.content[0].type === 'text' ? response.content[0].text : '';
-        console.log('Claude response:', text.substring(0, 200));
+        console.log('Claude response:', text.substring(0, 500));
 
+        // Wyczyść i napraw JSON
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
             throw new Error('Nie udało się wyekstrahować danych z KRS');
         }
 
-        const d = JSON.parse(jsonMatch[0]);
+        let jsonStr = jsonMatch[0];
+
+        // Napraw częste problemy z JSON od Claude
+        jsonStr = jsonStr
+            .replace(/,\s*}/g, '}')  // Usuwaj trailing commas przed }
+            .replace(/,\s*]/g, ']')  // Usuwaj trailing commas przed ]
+            .replace(/'/g, '"')      // Zamień single quotes na double
+            .replace(/\n/g, ' ')     // Usuń newlines wewnątrz
+            .replace(/\r/g, '')      // Usuń carriage returns
+            .replace(/\t/g, ' ')     // Usuń taby
+            .replace(/"\s+"/g, '","')  // Napraw brakujące przecinki między stringami
+            .replace(/}\s*{/g, '},{'); // Napraw brakujące przecinki między obiektami
+
+        let d;
+        try {
+            d = JSON.parse(jsonStr);
+        } catch (parseError) {
+            console.error('JSON parse error, trying fallback:', parseError);
+            console.error('Problematic JSON:', jsonStr.substring(0, 500));
+
+            // Fallback - spróbuj wyekstrahować kluczowe dane regexem
+            const nazwa = text.match(/"nazwa"\s*:\s*"([^"]+)"/)?.[1] || 'Nieznana spółka';
+            const krs = text.match(/"krs"\s*:\s*"([^"]+)"/)?.[1] || '';
+            const nip = text.match(/"nip"\s*:\s*"([^"]+)"/)?.[1] || '';
+            const regon = text.match(/"regon"\s*:\s*"([^"]+)"/)?.[1] || '';
+            const forma = text.match(/"forma"\s*:\s*"([^"]+)"/)?.[1] || '';
+            const adres = text.match(/"adres"\s*:\s*"([^"]+)"/)?.[1] || '';
+
+            d = { nazwa, krs, nip, regon, forma, adres, zarzad: [], wspolnicy: [], pkd: [] };
+        }
 
         return {
             krs: d.krs || '',
@@ -79,25 +109,25 @@ export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany>
             kapitalZakladowy: d.kapital || 0,
             dataPowstania: d.data_powstania || '',
             reprezentacja: (d.zarzad || []).map((z: { imie: string; nazwisko: string; funkcja: string }) => ({
-                imie: z.imie,
-                nazwisko: z.nazwisko,
-                funkcja: z.funkcja,
+                imie: z.imie || '',
+                nazwisko: z.nazwisko || '',
+                funkcja: z.funkcja || '',
             })),
             sposobReprezentacji: d.reprezentacja || '',
             wspolnicy: (d.wspolnicy || []).map((w: { nazwa: string; udzialy?: number }) => ({
-                nazwa: w.nazwa,
+                nazwa: w.nazwa || '',
                 udzialy: w.udzialy,
             })),
             pkd: (d.pkd || []).map((p: { kod: string; opis: string; glowny?: boolean }) => ({
-                kod: p.kod,
-                opis: p.opis,
+                kod: p.kod || '',
+                opis: p.opis || '',
                 przewazajaca: p.glowny || false,
             })),
             pkdPrzewazajace: d.pkd?.find((p: { glowny?: boolean }) => p.glowny)?.opis || d.pkd?.[0]?.opis || '',
         };
     } catch (error) {
         console.error('Claude error:', error);
-        throw new Error(`Błąd analizy: ${error instanceof Error ? error.message : 'nieznany'}`);
+        throw new Error(`Błąd analizy KRS: ${error instanceof Error ? error.message : 'nieznany'}`);
     }
 }
 
