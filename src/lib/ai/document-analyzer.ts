@@ -1,8 +1,8 @@
 /**
  * Analizator dokumentów - ZOPTYMALIZOWANY
  * 1. pdf-parse do ekstrakcji tekstu (0 tokenów)
- * 2. Gemini do analizy (darmowy tier)
- * 3. Claude tylko gdy Gemini nie działa
+ * 2. Fallback: Gemini Vision dla PDF
+ * 3. Gemini do analizy (darmowy tier)
  */
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
@@ -11,30 +11,58 @@ import { KRSCompany, FinancialData } from '@/types';
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Minimalne prompty dla oszczędności tokenów
-const KRS_PROMPT = `Wyekstrahuj dane z odpisu KRS. Zwróć TYLKO JSON:
+const KRS_PROMPT = `Wyekstrahuj dane z odpisu KRS. Zwróć TYLKO JSON (bez markdown):
 {"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"data":"","zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
 
-const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON:
+const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON (bez markdown):
 {"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}`;
 
 /**
- * Ekstrakcja tekstu z PDF (0 tokenów!)
+ * Ekstrakcja tekstu z PDF - z fallbackiem
  */
 async function extractTextFromPDF(buffer: Buffer): Promise<string> {
     try {
-        // Dynamic import for pdf-parse
+        // Próba 1: pdf-parse
         const pdfParseModule = await import('pdf-parse');
-        // Try different ways to access the function
         const pdfParse = typeof pdfParseModule === 'function'
             ? pdfParseModule
             : (pdfParseModule as { default?: unknown }).default || pdfParseModule;
 
         const data = await (pdfParse as (buffer: Buffer) => Promise<{ text: string }>)(buffer);
-        console.log(`📄 Extracted ${data.text.length} characters from PDF`);
-        return data.text;
+
+        if (data.text && data.text.length > 100) {
+            console.log(`📄 pdf-parse: Extracted ${data.text.length} characters`);
+            return data.text;
+        }
+        throw new Error('PDF text too short');
     } catch (error) {
-        console.error('PDF parse error:', error);
-        throw new Error('Nie udało się odczytać PDF. Sprawdź czy plik nie jest zabezpieczony.');
+        console.log('pdf-parse failed, falling back to Gemini Vision:', error);
+        return ''; // Pusty tekst - użyjemy Gemini Vision
+    }
+}
+
+/**
+ * Analizuje PDF przez Gemini Vision (gdy pdf-parse nie działa)
+ */
+async function analyzeWithGeminiVision(pdfBuffer: Buffer, prompt: string): Promise<string> {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+
+    const base64 = pdfBuffer.toString('base64');
+
+    try {
+        const result = await model.generateContent([
+            prompt,
+            {
+                inlineData: {
+                    mimeType: 'application/pdf',
+                    data: base64,
+                },
+            },
+        ]);
+        return result.response.text();
+    } catch (error) {
+        console.error('Gemini Vision error:', error);
+        throw new Error('Nie udało się przeanalizować PDF');
     }
 }
 
@@ -43,9 +71,7 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
  */
 async function analyzeWithGemini(text: string, prompt: string): Promise<string> {
     const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    // Ogranicz tekst do 10000 znaków dla oszczędności
-    const truncatedText = text.slice(0, 10000);
+    const truncatedText = text.slice(0, 15000);
 
     try {
         const result = await model.generateContent(`${prompt}\n\nTEKST:\n${truncatedText}`);
@@ -60,15 +86,18 @@ async function analyzeWithGemini(text: string, prompt: string): Promise<string> 
  * Parsuje JSON z odpowiedzi AI
  */
 function parseJSON(text: string): Record<string, unknown> {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    // Usuń markdown code blocks
+    let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+
+    const jsonMatch = clean.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
+        console.error('No JSON found in:', text.substring(0, 200));
         throw new Error('Brak JSON w odpowiedzi AI');
     }
 
     let jsonStr = jsonMatch[0]
         .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']')
-        .replace(/'/g, '"');
+        .replace(/,\s*]/g, ']');
 
     return JSON.parse(jsonStr);
 }
@@ -79,14 +108,24 @@ function parseJSON(text: string): Record<string, unknown> {
 export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
     console.log('📄 Analyzing KRS document...');
 
-    // 1. Ekstrakcja tekstu (0 tokenów)
+    // 1. Próba ekstrakcji tekstu
     const text = await extractTextFromPDF(pdfBuffer);
 
-    // 2. Analiza przez Gemini (darmowy)
-    const response = await analyzeWithGemini(text, KRS_PROMPT);
-    console.log('Gemini response:', response.substring(0, 200));
+    let response: string;
 
-    // 3. Parsowanie
+    if (text.length > 100) {
+        // Mamy tekst - użyj Gemini text
+        console.log('Using Gemini text analysis');
+        response = await analyzeWithGemini(text, KRS_PROMPT);
+    } else {
+        // Brak tekstu - użyj Gemini Vision
+        console.log('Using Gemini Vision for PDF');
+        response = await analyzeWithGeminiVision(pdfBuffer, KRS_PROMPT);
+    }
+
+    console.log('Gemini response:', response.substring(0, 300));
+
+    // Parsowanie
     const d = parseJSON(response) as Record<string, unknown>;
 
     return {
@@ -123,14 +162,20 @@ export async function analyzeFinancialDocument(
 ): Promise<FinancialData[]> {
     console.log('📊 Analyzing financial document...');
 
-    // Excel - parsuj lokalnie (0 tokenów!)
+    // Excel - parsuj lokalnie
     if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return parseExcelFinancials(buffer);
     }
 
-    // PDF - ekstrakcja tekstu + Gemini
+    // PDF - próbuj tekst, potem Vision
     const text = await extractTextFromPDF(buffer);
-    const response = await analyzeWithGemini(text, FIN_PROMPT);
+
+    let response: string;
+    if (text.length > 100) {
+        response = await analyzeWithGemini(text, FIN_PROMPT);
+    } else {
+        response = await analyzeWithGeminiVision(buffer, FIN_PROMPT);
+    }
 
     try {
         const d = parseJSON(response) as {
@@ -156,13 +201,13 @@ export async function analyzeFinancialDocument(
             aktywaTrwale: 0,
         }));
     } catch {
-        console.error('Failed to parse financials, returning empty');
+        console.error('Failed to parse financials');
         return [];
     }
 }
 
 /**
- * Parsuje Excel lokalnie (0 tokenów!)
+ * Parsuje Excel lokalnie
  */
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');
