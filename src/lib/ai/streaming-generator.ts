@@ -295,6 +295,9 @@ PARAMETRY OFERTY (podane przez użytkownika - użyj tych konkretnych wartości!)
 - Firma inwestycyjna: ${offerParams.firmaInwestycyjna || 'Oferta bez pośrednictwa firmy inwestycyjnej'}
 - Data ważności memorandum: ${offerParams.dataWaznosci || '12 miesięcy od daty sporządzenia'}
 ` : '';
+    // Najnowsze dane finansowe do użycia w promptach
+    const fin = financials.length > 0 ? financials[financials.length - 1] : null;
+
     const companyData = `
 DANE SPÓŁKI (z odpisu KRS):
 - Pełna nazwa: ${company.nazwa}
@@ -346,7 +349,7 @@ SZCZEGÓŁOWE WYMAGANIA:
 - §9: Data ważności - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
 - §10: Informacje o zmianach publikowane na stronie [DO UZUPEŁNIENIA]`,
 
-        risks: `Napisz rozdział II. CZYNNIKI RYZYKA zgodnie z Dz.U. 2020.1053.
+        risks: `Napisz rozdzial II. CZYNNIKI RYZYKA zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
 ${finData}
@@ -356,27 +359,35 @@ ${subsectionsText}
 
 ${FORMATTING_RULES}
 
-SZCZEGÓŁOWE WYMAGANIA:
+KLUCZOWE INSTRUKCJE - AUTOMATYCZNA OCENA RYZYK:
+Na podstawie danych finansowych SAMODZIELNIE oceń i opisz ryzyka. NIE używaj [DO UZUPELNIENIA]!
+
+ANALIZA DANYCH (uzyj konkretnych liczb):
+- Jesli zobowiazania > 0 i stanowia wiecej niz 30% bilansu = opisz ryzyko zadluzenia z konkretnymi wartosciami
+- Jesli zobowiazania = 0 lub brak kredytow = napisz "Spolka nie posiada zobowiazan oprocentowanych, dlatego ryzyko stopy procentowej nie dotyczy Spolki"
+- Jesli przychody rosna = napisz o pozytywnym trendzie, jesli spadaja = opisz ryzyko spadku przychodow z konkretnymi procentami
+
+SZCZEGOLOWE WYMAGANIA:
 - §11 (minimum 5 ryzyk operacyjnych):
-  * Ryzyko konkurencji w branży
-  * Ryzyko utraty kluczowych pracowników
+  * Ryzyko konkurencji w branzy (opisz na podstawie PKD spolki)
+  * Ryzyko utraty kluczowych pracownikow (zatrudnienie: ${fin?.zatrudnienie || 'brak danych'})
   * Ryzyko zmian technologicznych
-  * Ryzyko regulacyjne (zmiany przepisów)
-  * Ryzyko uzależnienia od kluczowych klientów/dostawców
+  * Ryzyko regulacyjne
+  * Ryzyko uzaleznienia od kluczowych klientow
   
-- §12 (minimum 4 ryzyka finansowe):
-  * Ryzyko płynności finansowej
-  * Ryzyko walutowe (jeśli dotyczy)
-  * Ryzyko stopy procentowej
-  * Ryzyko kredytowe
+- §12 (minimum 4 ryzyka finansowe) - KONKRETNA OCENA:
+  * Ryzyko plynnosci: aktywa obrotowe ${fin?.aktywaObrotowe || 0} PLN vs zobowiazania ${fin?.zobowiazania || 0} PLN
+  * Ryzyko walutowe: opisz czy Spolka prowadzi dzialalnosc miedzynarodowa (jesli brak informacji - napisz ze nie dotyczy)
+  * Ryzyko stopy procentowej: JESLI zobowiazania sa niskie lub zerowe - napisz "Spolka nie posiada istotnych zobowiazan oprocentowanych zmienną stopą, dlatego ryzyko stopy procentowej jest ograniczone"
+  * Ryzyko kredytowe: ocen na podstawie struktury bilansowej
   
 - §13 (minimum 4 ryzyka inwestycyjne):
-  * Ryzyko zmienności kursu akcji
-  * Ryzyko ograniczonej płynności obrotu
+  * Ryzyko zmiennosci kursu akcji
+  * Ryzyko ograniczonej plynnosci obrotu
   * Ryzyko rozwodnienia
-  * Ryzyko niedojścia emisji do skutku
+  * Ryzyko niedojscia emisji do skutku
 
-Każde ryzyko opisz w 3-5 zdaniach, wyjaśniając jego naturę i potencjalny wpływ.`,
+UWAGA: Kazde ryzyko opisz w 3-5 zdaniach uzywajac KONKRETNYCH danych liczbowych ze sprawozdania!`,
 
         offer: `Napisz rozdział IV. DANE O OFERCIE AKCJI zgodnie z Dz.U. 2020.1053.
 

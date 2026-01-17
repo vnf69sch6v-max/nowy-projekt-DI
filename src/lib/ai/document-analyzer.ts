@@ -52,11 +52,12 @@ WAŻNE:
 - Kapitał podaj w PLN (nie w groszach)
 - Data rejestracji to data wpisu do KRS`;
 
-// Rozszerzony prompt dla danych finansowych
+// Rozszerzony prompt dla danych finansowych z analiza zobowiazan
 const FIN_PROMPT = `Przeanalizuj sprawozdanie finansowe i wyekstrahuj WSZYSTKIE dane liczbowe.
-Szukaj wartości w bilansie, rachunku zysków i strat, oraz informacji dodatkowych.
+Szukaj wartosci w bilansie, rachunku zyskow i strat, oraz informacjach dodatkowych.
+SZCZEGOLNIE szukaj informacji o kredytach, pozyczkach i zobowiazaniach oprocentowanych.
 
-Zwróć TYLKO JSON (bez markdown, bez komentarzy):
+Zwroc TYLKO JSON (bez markdown, bez komentarzy):
 {
   "lata": [
     {
@@ -78,18 +79,35 @@ Zwróć TYLKO JSON (bez markdown, bez komentarzy):
       "zobowiazania": 0,
       "zobowiazania_dlugoterminowe": 0,
       "zobowiazania_krotkoterminowe": 0,
+      "kredyty_i_pozyczki": 0,
       "zatrudnienie": 0
     }
-  ]
+  ],
+  "analiza_zobowiazan": {
+    "posiada_kredyty": false,
+    "rodzaj_oprocentowania": "brak/stale/zmienne/mieszane",
+    "waluty_zobowiazan": ["PLN"],
+    "glowni_wierzyciele": [],
+    "zabezpieczenia": [],
+    "opis_struktury_dlugu": ""
+  },
+  "przychody_eksportowe": {
+    "posiada_eksport": false,
+    "udzial_eksportu_procent": 0,
+    "glowne_rynki": []
+  }
 }
 
-WAŻNE:
-- Szukaj danych za WSZYSTKIE lata w dokumencie (zwłaszcza 2023, 2024, 2025)
-- Podawaj wartości w PLN (jeśli podane w tys. PLN, pomnóż przez 1000)
-- Jeśli brak jakiejś wartości, wpisz 0
-- Przychody to "Przychody netto ze sprzedaży" lub "Przychody ze sprzedaży produktów"
+WAZNE:
+- Szukaj danych za WSZYSTKIE lata w dokumencie (zwlaszcza 2023, 2024, 2025)
+- Podawaj wartosci w PLN (jesli podane w tys. PLN, pomnoz przez 1000)
+- Jesli brak jakiejs wartosci, wpisz 0
+- Przychody to "Przychody netto ze sprzedazy" lub "Przychody ze sprzedazy produktow"
 - Bilans to "Aktywa razem" lub "Suma bilansowa" lub "Pasywa razem"
-- Kapitał własny może być opisany jako "Kapitał (fundusz) własny"`;
+- Kapital wlasny moze byc opisany jako "Kapital (fundusz) wlasny"
+- W sekcji analiza_zobowiazan okresl czy spolka ma kredyty/pozyczki oprocentowane
+- Jesli nie ma informacji o kredytach, ustaw posiada_kredyty na false`;
+
 
 
 /**
