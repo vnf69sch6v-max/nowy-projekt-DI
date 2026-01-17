@@ -43,10 +43,9 @@ function sanitize(text: string): string {
 }
 
 /**
- * Usuwa podwójny spis treści z treści AI
+ * Usuwa podwójny spis treści i powtórzenia z treści AI
  */
 function removeDuplicateTOC(text: string): string {
-    // Usuń sekcję "Spis tresci" z treści AI (zachowujemy tylko wbudowany w PDF)
     let result = text;
 
     // Wzorce spisu treści które AI może wygenerować
@@ -59,6 +58,41 @@ function removeDuplicateTOC(text: string): string {
     for (const pattern of tocPatterns) {
         result = result.replace(pattern, '');
     }
+
+    // Usuń powtórzony sposób reprezentacji
+    result = result.replace(
+        /(DO SKLADANIA OSWIADCZEN W IMIENIU SPOLKI[\s\S]{30,300}?PROKURENTEM[\s\S]{0,20}?)(\s*(DO SKLADANIA OSWIADCZEN|Do skladania oswiadczen)[\s\S]{30,300}?(PROKURENTEM|prokurentem)[\s\S]{0,20}?)+/gi,
+        '$1'
+    );
+
+    // Usuń kolejne identyczne lub bardzo podobne linie
+    const lines = result.split('\n');
+    const filteredLines: string[] = [];
+    let prevLine = '';
+
+    for (const line of lines) {
+        const normalized = line.trim().toLowerCase().replace(/\s+/g, ' ');
+        const prevNormalized = prevLine.trim().toLowerCase().replace(/\s+/g, ' ');
+
+        // Pomiń jeśli ta sama linia lub bardzo podobna (>90% dopasowania)
+        if (normalized === prevNormalized && normalized.length > 20) {
+            continue;
+        }
+
+        // Pomiń jeśli to podwójny nagłówek sekcji
+        if (/^[ivx]+\.\s/i.test(normalized) && /^[ivx]+\.\s/i.test(prevNormalized)) {
+            const currSection = normalized.match(/^([ivx]+)\./i)?.[1];
+            const prevSection = prevNormalized.match(/^([ivx]+)\./i)?.[1];
+            if (currSection === prevSection) {
+                continue;
+            }
+        }
+
+        filteredLines.push(line);
+        prevLine = line;
+    }
+
+    result = filteredLines.join('\n');
 
     // Usuń nadmiarowe puste linie
     result = result.replace(/\n{4,}/g, '\n\n\n');
