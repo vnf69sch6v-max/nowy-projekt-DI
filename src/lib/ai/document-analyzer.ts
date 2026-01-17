@@ -29,8 +29,45 @@ function getFirebaseApp() {
 const KRS_PROMPT = `Przeanalizuj odpis KRS i zwróć TYLKO JSON (bez markdown):
 {"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
 
-const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON:
-{"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}`;
+// Rozszerzony prompt dla danych finansowych
+const FIN_PROMPT = `Przeanalizuj sprawozdanie finansowe i wyekstrahuj WSZYSTKIE dane liczbowe.
+Szukaj wartości w bilansie, rachunku zysków i strat, oraz informacji dodatkowych.
+
+Zwróć TYLKO JSON (bez markdown, bez komentarzy):
+{
+  "lata": [
+    {
+      "rok": 2025,
+      "przychody": 0,
+      "koszt_wlasny": 0,
+      "zysk_brutto": 0,
+      "zysk_netto": 0,
+      "bilans": 0,
+      "aktywa_trwale": 0,
+      "aktywa_obrotowe": 0,
+      "zapasy": 0,
+      "naleznosci": 0,
+      "srodki_pieniezne": 0,
+      "kapital_wlasny": 0,
+      "kapital_zakladowy": 0,
+      "kapital_zapasowy": 0,
+      "zysk_z_lat_ubieglych": 0,
+      "zobowiazania": 0,
+      "zobowiazania_dlugoterminowe": 0,
+      "zobowiazania_krotkoterminowe": 0,
+      "zatrudnienie": 0
+    }
+  ]
+}
+
+WAŻNE:
+- Szukaj danych za WSZYSTKIE lata w dokumencie (zwłaszcza 2023, 2024, 2025)
+- Podawaj wartości w PLN (jeśli podane w tys. PLN, pomnóż przez 1000)
+- Jeśli brak jakiejś wartości, wpisz 0
+- Przychody to "Przychody netto ze sprzedaży" lub "Przychody ze sprzedaży produktów"
+- Bilans to "Aktywa razem" lub "Suma bilansowa" lub "Pasywa razem"
+- Kapitał własny może być opisany jako "Kapitał (fundusz) własny"`;
+
 
 /**
  * Sleep helper
@@ -152,21 +189,34 @@ export async function analyzeFinancialDocument(
     try {
         const d = parseJSON(response) as {
             lata?: Array<{
-                rok: number; przychody: number; zysk: number;
-                bilans: number; kapital: number; zobowiazania: number;
+                rok: number;
+                przychody?: number;
+                zysk_brutto?: number;
+                zysk_netto?: number;
+                zysk?: number;
+                bilans?: number;
+                aktywa_trwale?: number;
+                aktywa_obrotowe?: number;
+                kapital_wlasny?: number;
+                kapital?: number;
+                zobowiazania?: number;
+                zobowiazania_dlugoterminowe?: number;
+                zobowiazania_krotkoterminowe?: number;
+                zatrudnienie?: number;
             }>
         };
 
         return (d.lata || []).map(y => ({
             rok: y.rok,
             przychodyNetto: y.przychody || 0,
-            zyskBrutto: y.zysk || 0,
-            zyskNetto: y.zysk || 0,
+            zyskBrutto: y.zysk_brutto || y.zysk || 0,
+            zyskNetto: y.zysk_netto || y.zysk || 0,
             sumaBilansowa: y.bilans || 0,
-            kapitalWlasny: y.kapital || 0,
-            zobowiazania: y.zobowiazania || 0,
-            aktywaObrotowe: 0,
-            aktywaTrwale: 0,
+            kapitalWlasny: y.kapital_wlasny || y.kapital || 0,
+            zobowiazania: y.zobowiazania || (y.zobowiazania_dlugoterminowe || 0) + (y.zobowiazania_krotkoterminowe || 0),
+            aktywaObrotowe: y.aktywa_obrotowe || 0,
+            aktywaTrwale: y.aktywa_trwale || 0,
+            zatrudnienie: y.zatrudnienie || 0,
         }));
     } catch {
         return [];
@@ -176,27 +226,93 @@ export async function analyzeFinancialDocument(
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const data = XLSX.utils.sheet_to_json(sheet);
+
+    console.log('📊 Parsing Excel with', workbook.SheetNames.length, 'sheets');
 
     const financials: FinancialData[] = [];
-    for (const row of data) {
-        const r = row as Record<string, unknown>;
-        const rok = r['Rok'] || r['rok'] || r['Year'];
-        if (rok && typeof rok === 'number') {
-            financials.push({
-                rok,
-                przychodyNetto: Number(r['Przychody'] || 0),
-                zyskBrutto: Number(r['Zysk brutto'] || 0),
-                zyskNetto: Number(r['Zysk netto'] || 0),
-                sumaBilansowa: Number(r['Suma bilansowa'] || 0),
-                kapitalWlasny: Number(r['Kapitał własny'] || 0),
-                zobowiazania: Number(r['Zobowiązania'] || 0),
-                aktywaObrotowe: 0,
-                aktywaTrwale: 0,
-            });
+
+    // Funkcja do znalezienia wartości po wzorcu nazwy
+    const findValue = (row: Record<string, unknown>, patterns: string[]): number => {
+        for (const key of Object.keys(row)) {
+            const keyLower = key.toLowerCase();
+            for (const pattern of patterns) {
+                if (keyLower.includes(pattern.toLowerCase())) {
+                    const val = row[key];
+                    if (typeof val === 'number') return val;
+                    if (typeof val === 'string') {
+                        const num = parseFloat(val.replace(/[\s,]/g, '').replace(',', '.'));
+                        if (!isNaN(num)) return num;
+                    }
+                }
+            }
+        }
+        return 0;
+    };
+
+    // Sprawdź wszystkie arkusze
+    for (const sheetName of workbook.SheetNames) {
+        const sheet = workbook.Sheets[sheetName];
+        const data = XLSX.utils.sheet_to_json(sheet);
+
+        console.log(`  Sheet "${sheetName}":`, data.length, 'rows');
+
+        for (const row of data) {
+            const r = row as Record<string, unknown>;
+
+            // Szukaj roku w różnych formatach
+            let rok = 0;
+            for (const key of Object.keys(r)) {
+                const keyLower = key.toLowerCase();
+                if (keyLower.includes('rok') || keyLower.includes('year') || keyLower.includes('okres')) {
+                    const val = r[key];
+                    if (typeof val === 'number' && val > 2000 && val < 2100) {
+                        rok = val;
+                        break;
+                    }
+                }
+            }
+
+            // Jeśli nie znaleziono roku, spróbuj wyciągnąć z pierwszej kolumny
+            if (rok === 0) {
+                const firstVal = Object.values(r)[0];
+                if (typeof firstVal === 'number' && firstVal > 2000 && firstVal < 2100) {
+                    rok = firstVal;
+                }
+            }
+
+            if (rok > 0) {
+                const existing = financials.find(f => f.rok === rok);
+                if (existing) {
+                    // Uzupełnij brakujące dane
+                    if (!existing.przychodyNetto) existing.przychodyNetto = findValue(r, ['przychod', 'revenue', 'sprzedaż']);
+                    if (!existing.zyskNetto) existing.zyskNetto = findValue(r, ['zysk netto', 'net profit', 'wynik netto']);
+                    if (!existing.zyskBrutto) existing.zyskBrutto = findValue(r, ['zysk brutto', 'gross profit']);
+                    if (!existing.sumaBilansowa) existing.sumaBilansowa = findValue(r, ['suma bilansowa', 'aktywa razem', 'total assets']);
+                    if (!existing.kapitalWlasny) existing.kapitalWlasny = findValue(r, ['kapitał własny', 'equity', 'fundusz własny']);
+                    if (!existing.zobowiazania) existing.zobowiazania = findValue(r, ['zobowiązania', 'liabilities']);
+                    if (!existing.aktywaObrotowe) existing.aktywaObrotowe = findValue(r, ['aktywa obrotowe', 'current assets']);
+                    if (!existing.aktywaTrwale) existing.aktywaTrwale = findValue(r, ['aktywa trwałe', 'fixed assets']);
+                } else {
+                    financials.push({
+                        rok,
+                        przychodyNetto: findValue(r, ['przychod', 'revenue', 'sprzedaż']),
+                        zyskBrutto: findValue(r, ['zysk brutto', 'gross profit']),
+                        zyskNetto: findValue(r, ['zysk netto', 'net profit', 'wynik netto']),
+                        sumaBilansowa: findValue(r, ['suma bilansowa', 'aktywa razem', 'total assets']),
+                        kapitalWlasny: findValue(r, ['kapitał własny', 'equity', 'fundusz własny']),
+                        zobowiazania: findValue(r, ['zobowiązania', 'liabilities']),
+                        aktywaObrotowe: findValue(r, ['aktywa obrotowe', 'current assets']),
+                        aktywaTrwale: findValue(r, ['aktywa trwałe', 'fixed assets']),
+                    });
+                }
+            }
         }
     }
+
+    // Sortuj chronologicznie
+    financials.sort((a, b) => a.rok - b.rok);
+
+    console.log('📊 Extracted', financials.length, 'years of data');
     return financials;
 }
 
