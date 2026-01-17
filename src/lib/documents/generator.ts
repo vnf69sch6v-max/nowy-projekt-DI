@@ -5,6 +5,7 @@ import fs from 'fs/promises';
 
 /**
  * Generuje dokument Word z memorandum informacyjnym
+ * Używa sekcji wygenerowanych przez AI
  */
 export async function generateMemorandum(
     data: MemorandumContext
@@ -22,9 +23,9 @@ export async function generateMemorandum(
         });
         return Buffer.from(report);
     } catch {
-        // Jeśli nie ma szablonu, użyj prostego formatu tekstowego
-        console.warn('Template not found, generating simple document');
-        return generateSimpleDocument(data);
+        // Jeśli nie ma szablonu, generuj dokument z sekcjami AI
+        console.warn('Template not found, generating document with AI sections');
+        return generateAIPoweredDocument(data);
     }
 }
 
@@ -44,14 +45,24 @@ function formatAmount(amount: number): string {
 }
 
 /**
- * Generuje prosty dokument bez szablonu (fallback)
+ * Generuje dokument z sekcjami wygenerowanymi przez AI
  */
-async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> {
-    // Dynamiczny import docx dla fallbacku
+async function generateAIPoweredDocument(data: MemorandumContext): Promise<Buffer> {
     const docx = await import('docx');
     const { Document, Packer, Paragraph, TextRun, HeadingLevel, Table, TableRow, TableCell, WidthType, BorderStyle, AlignmentType } = docx;
 
-    // Helper functions using imported classes
+    // Helper: konwertuje tekst AI na paragrafy
+    function textToParagraphs(text: string | undefined, spacing = 200): InstanceType<typeof Paragraph>[] {
+        if (!text) return [];
+        return text.split('\n\n').filter(p => p.trim()).map(paragraph =>
+            new Paragraph({
+                text: paragraph.trim(),
+                spacing: { after: spacing },
+            })
+        );
+    }
+
+    // Helper: tworzy tabelę informacyjną
     function createInfoTable(rows: [string, string][]) {
         return new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
@@ -74,7 +85,7 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                         }),
                         new TableCell({
                             width: { size: 70, type: WidthType.PERCENTAGE },
-                            children: [new Paragraph({ text: value })],
+                            children: [new Paragraph({ text: value || 'brak danych' })],
                         }),
                     ],
                 })
@@ -82,6 +93,7 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
         });
     }
 
+    // Helper: tworzy tabelę finansową
     function createFinancialsTable(financials: FinancialData[]) {
         return new Table({
             width: { size: 100, type: WidthType.PERCENTAGE },
@@ -94,7 +106,6 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                 insideVertical: { style: BorderStyle.SINGLE, size: 1 },
             },
             rows: [
-                // Header
                 new TableRow({
                     children: [
                         new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Pozycja', bold: true })] })] }),
@@ -103,7 +114,6 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                         ),
                     ],
                 }),
-                // Rows
                 ...(['przychodyNetto', 'zyskNetto', 'sumaBilansowa', 'kapitalWlasny'] as const).map(key =>
                     new TableRow({
                         children: [
@@ -133,7 +143,7 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
             {
                 properties: {},
                 children: [
-                    // Tytuł
+                    // ========== STRONA TYTUŁOWA ==========
                     new Paragraph({
                         text: 'MEMORANDUM INFORMACYJNE',
                         heading: HeadingLevel.TITLE,
@@ -146,58 +156,83 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                             new TextRun({
                                 text: data.nazwa_spolki,
                                 bold: true,
-                                size: 32,
+                                size: 36,
                             }),
                         ],
                         alignment: AlignmentType.CENTER,
                         spacing: { after: 600 },
                     }),
 
-                    // Data generacji
                     new Paragraph({
                         text: `Wygenerowano: ${data.data_generacji}`,
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 },
+                    }),
+
+                    new Paragraph({
+                        text: 'Dokument sporządzony z wykorzystaniem sztucznej inteligencji',
                         alignment: AlignmentType.CENTER,
                         spacing: { after: 800 },
                     }),
 
-                    // Sekcja 1: Dane rejestrowe
+                    // ========== 1. WSTĘP (AI) ==========
                     new Paragraph({
-                        text: '1. DANE REJESTROWE',
+                        text: '1. WSTĘP',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
+                    }),
+
+                    ...textToParagraphs(data.sekcja_wstep),
+
+                    // ========== 2. DANE REJESTROWE ==========
+                    new Paragraph({
+                        text: '2. DANE REJESTROWE EMITENTA',
+                        heading: HeadingLevel.HEADING_1,
+                        spacing: { before: 600, after: 300 },
                     }),
 
                     createInfoTable([
+                        ['Pełna nazwa', data.nazwa_spolki],
                         ['NIP', data.nip],
                         ['KRS', data.krs],
                         ['REGON', data.regon],
                         ['Forma prawna', data.forma_prawna],
-                        ['Adres', data.adres_pelny],
+                        ['Adres siedziby', data.adres_pelny],
                         ['Data powstania', data.data_powstania],
                     ]),
 
-                    // Sekcja 2: Kapitał
+                    // ========== 3. KAPITAŁ I STRUKTURA (AI) ==========
                     new Paragraph({
-                        text: '2. KAPITAŁ ZAKŁADOWY',
+                        text: '3. KAPITAŁ ZAKŁADOWY I STRUKTURA WŁASNOŚCIOWA',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
                     }),
+
+                    ...textToParagraphs(data.sekcja_kapital),
 
                     new Paragraph({
                         text: `Kapitał zakładowy spółki wynosi ${data.kapital_zakladowy} ${data.waluta}.`,
-                        spacing: { after: 200 },
+                        spacing: { before: 200, after: 200 },
                     }),
 
-                    // Sekcja 3: Zarząd
+                    // ========== 4. ORGANY SPÓŁKI (AI) ==========
                     new Paragraph({
-                        text: '3. REPREZENTACJA (ZARZĄD)',
+                        text: '4. ORGANY SPÓŁKI I SPOSÓB REPREZENTACJI',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
                     }),
+
+                    ...textToParagraphs(data.sekcja_zarzad),
 
                     new Paragraph({
                         text: `Sposób reprezentacji: ${data.sposob_reprezentacji}`,
-                        spacing: { after: 200 },
+                        spacing: { before: 200, after: 200 },
+                    }),
+
+                    new Paragraph({
+                        text: 'Skład zarządu:',
+                        spacing: { before: 200, after: 100 },
+                        children: [new TextRun({ text: 'Skład zarządu:', bold: true })],
                     }),
 
                     ...data.reprezentacja.map(osoba =>
@@ -207,47 +242,66 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                         })
                     ),
 
-                    // Sekcja 4: Przedmiot działalności
+                    // ========== 5. PRZEDMIOT DZIAŁALNOŚCI (AI) ==========
                     new Paragraph({
-                        text: '4. PRZEDMIOT DZIAŁALNOŚCI',
+                        text: '5. PRZEDMIOT I ZAKRES DZIAŁALNOŚCI',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
                     }),
+
+                    ...textToParagraphs(data.sekcja_dzialalnosc),
 
                     new Paragraph({
                         text: `Przeważająca działalność: ${data.pkd_przewazajace}`,
-                        spacing: { after: 200 },
+                        spacing: { before: 200, after: 200 },
                     }),
 
-                    // Sekcja 5: Dane finansowe
+                    // ========== 6. SYTUACJA FINANSOWA (AI) ==========
                     new Paragraph({
-                        text: '5. WYBRANE DANE FINANSOWE',
+                        text: '6. SYTUACJA FINANSOWA I WYNIKI DZIAŁALNOŚCI',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
+                    }),
+
+                    ...textToParagraphs(data.sekcja_finanse),
+
+                    new Paragraph({
+                        text: 'Wybrane dane finansowe:',
+                        spacing: { before: 300, after: 200 },
+                        children: [new TextRun({ text: 'Wybrane dane finansowe:', bold: true })],
                     }),
 
                     createFinancialsTable(data.finanse),
 
-                    // Sekcja 6: Czynniki ryzyka
+                    // ========== 7. CZYNNIKI RYZYKA ==========
                     new Paragraph({
-                        text: '6. CZYNNIKI RYZYKA',
+                        text: '7. CZYNNIKI RYZYKA',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
                     }),
 
-                    ...data.ryzyka.flatMap(ryzyko => [
+                    new Paragraph({
+                        text: 'Inwestowanie w papiery wartościowe wiąże się z określonymi ryzykami. Poniżej przedstawiono kluczowe czynniki ryzyka zidentyfikowane dla Emitenta.',
+                        spacing: { after: 300 },
+                    }),
+
+                    ...data.ryzyka.flatMap((ryzyko, index) => [
                         new Paragraph({
                             children: [
                                 new TextRun({
-                                    text: `${ryzyko.tytul.toUpperCase()} `,
+                                    text: `${index + 1}. ${ryzyko.tytul.toUpperCase()}`,
                                     bold: true,
                                 }),
                                 new TextRun({
-                                    text: `[${ryzyko.kategoria}]`,
+                                    text: ` [${ryzyko.kategoria.toUpperCase()}]`,
                                     italics: true,
+                                    color: ryzyko.istotnosc === 'wysoka' ? 'CC0000' : '666666',
                                 }),
+                                ryzyko.istotnosc === 'wysoka' ? new TextRun({
+                                    text: ' ⚠️',
+                                }) : new TextRun({ text: '' }),
                             ],
-                            spacing: { before: 200, after: 100 },
+                            spacing: { before: 300, after: 100 },
                         }),
                         new Paragraph({
                             text: ryzyko.opis,
@@ -255,23 +309,37 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                         }),
                     ]),
 
-                    // Sekcja 7: Podsumowanie AI
+                    // ========== 8. PODSUMOWANIE (AI) ==========
                     new Paragraph({
-                        text: '7. PODSUMOWANIE',
+                        text: '8. PODSUMOWANIE',
                         heading: HeadingLevel.HEADING_1,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
                     }),
 
-                    new Paragraph({
-                        text: data.podsumowanie_ai,
-                        spacing: { after: 400 },
-                    }),
+                    ...textToParagraphs(data.podsumowanie_ai),
 
-                    // Stopka
+                    // ========== STOPKA ==========
                     new Paragraph({
-                        text: '---',
+                        text: '─'.repeat(50),
                         alignment: AlignmentType.CENTER,
-                        spacing: { before: 400, after: 200 },
+                        spacing: { before: 600, after: 300 },
+                    }),
+
+                    new Paragraph({
+                        children: [
+                            new TextRun({
+                                text: 'WAŻNE INFORMACJE',
+                                bold: true,
+                            }),
+                        ],
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 200 },
+                    }),
+
+                    new Paragraph({
+                        text: 'Niniejsze memorandum informacyjne zostało sporządzone z wykorzystaniem sztucznej inteligencji (AI) na podstawie publicznie dostępnych danych z Krajowego Rejestru Sądowego oraz symulowanych danych finansowych.',
+                        alignment: AlignmentType.CENTER,
+                        spacing: { after: 100 },
                     }),
 
                     new Paragraph({
@@ -281,7 +349,7 @@ async function generateSimpleDocument(data: MemorandumContext): Promise<Buffer> 
                     }),
 
                     new Paragraph({
-                        text: 'Przed podjęciem decyzji inwestycyjnych zaleca się konsultację z doradcą prawnym i finansowym.',
+                        text: 'Przed podjęciem decyzji inwestycyjnych zaleca się konsultację z doradcą prawnym i finansowym oraz weryfikację wszystkich danych w źródłach pierwotnych.',
                         alignment: AlignmentType.CENTER,
                         spacing: { after: 200 },
                     }),

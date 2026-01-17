@@ -1,9 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { fetchKRSData, nipToKrs, formatAddress, formatCurrency } from '@/lib/krs/api';
 import { generateMockFinancials, formatFinancialAmount } from '@/lib/financials/mock';
-import { analyzeRisks, generateSummary } from '@/lib/ai/analyzer';
+import { generateMemorandumSections, sectionsToMemorandumContext } from '@/lib/ai/pipeline';
 import { generateMemorandum } from '@/lib/documents/generator';
-import { MemorandumContext } from '@/types';
+import { KRSCompany } from '@/types';
 
 export async function POST(request: NextRequest) {
     try {
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
             }
         }
 
-        console.log(`Generating memorandum for KRS: ${krsNumber}`);
+        console.log(`🚀 Generating AI-powered memorandum for KRS: ${krsNumber}`);
 
         // Pobierz dane z KRS
         let companyData;
@@ -42,54 +42,41 @@ export async function POST(request: NextRequest) {
         // Generuj dane finansowe (mock)
         const financials = generateMockFinancials(companyData.nazwa);
 
-        // Analiza AI
-        console.log('Running AI analysis...');
-        const [risks, summary] = await Promise.all([
-            analyzeRisks(companyData, financials),
-            generateSummary(companyData, financials),
-        ]);
-
-        // Przygotuj kontekst dokumentu
-        const context: MemorandumContext = {
-            nazwa_spolki: companyData.nazwa,
-            nazwa_skrocona: companyData.nazwaSkrocona || companyData.nazwa.split(' ')[0],
-            nip: companyData.nip,
+        // Konwertuj do formatu KRSCompany dla pipeline'u AI
+        const companyForAI: KRSCompany = {
             krs: companyData.krs,
+            nip: companyData.nip,
             regon: companyData.regon,
-            forma_prawna: companyData.formaOrganizacyjna,
-
-            adres_pelny: formatAddress(companyData.adres),
-            ulica: companyData.adres.ulica,
-            kod_pocztowy: companyData.adres.kodPocztowy,
-            miejscowosc: companyData.adres.miejscowosc,
-
-            kapital_zakladowy: formatCurrency(companyData.kapitalZakladowy),
-            waluta: companyData.waluta,
-
-            data_powstania: companyData.dataPowstania,
-            data_generacji: new Date().toLocaleDateString('pl-PL', {
-                year: 'numeric',
-                month: 'long',
-                day: 'numeric',
-            }),
-
+            nazwa: companyData.nazwa,
+            formaOrganizacyjna: companyData.formaOrganizacyjna,
+            siedzibaAdres: formatAddress(companyData.adres),
+            kapitalZakladowy: companyData.kapitalZakladowy,
+            dataPowstania: companyData.dataPowstania,
             reprezentacja: companyData.reprezentacja.osoby,
-            sposob_reprezentacji: companyData.reprezentacja.sposob,
-
-            przedmiot_dzialalnosci: companyData.przedmiotDzialalnosci,
-            pkd_przewazajace: companyData.przedmiotDzialalnosci[0]?.opis || 'Działalność gospodarcza',
-
-            finanse: financials,
-            przychody_ostatni_rok: formatFinancialAmount(financials[0].przychodyNetto),
-            zysk_ostatni_rok: formatFinancialAmount(financials[0].zyskNetto),
-            suma_bilansowa: formatFinancialAmount(financials[0].sumaBilansowa),
-
-            ryzyka: risks,
-            podsumowanie_ai: summary,
+            sposobReprezentacji: companyData.reprezentacja.sposob,
+            wspolnicy: companyData.wspolnicy,
+            pkd: companyData.przedmiotDzialalnosci,
+            pkdPrzewazajace: companyData.przedmiotDzialalnosci[0]?.opis || 'Działalność gospodarcza',
         };
 
-        // Generuj dokument
-        console.log('Generating Word document...');
+        // 🤖 Uruchom pełny pipeline AI z generacją sekcyjną
+        console.log('🤖 Running AI pipeline with sectional generation...');
+        const sections = await generateMemorandumSections(companyForAI, financials);
+
+        // Konwertuj sekcje na kontekst dokumentu
+        const context = sectionsToMemorandumContext(companyForAI, financials, sections);
+
+        // Dodaj brakujące pola z oryginalnych danych
+        context.ulica = companyData.adres.ulica;
+        context.kod_pocztowy = companyData.adres.kodPocztowy;
+        context.miejscowosc = companyData.adres.miejscowosc;
+        context.przedmiot_dzialalnosci = companyData.przedmiotDzialalnosci;
+        context.przychody_ostatni_rok = formatFinancialAmount(financials[0].przychodyNetto);
+        context.zysk_ostatni_rok = formatFinancialAmount(financials[0].zyskNetto);
+        context.suma_bilansowa = formatFinancialAmount(financials[0].sumaBilansowa);
+
+        // Generuj dokument Word
+        console.log('📄 Generating Word document with AI-generated sections...');
         const documentBuffer = await generateMemorandum(context);
 
         // Zwróć plik
@@ -97,6 +84,8 @@ export async function POST(request: NextRequest) {
 
         // Convert Buffer to Uint8Array for NextResponse
         const responseBody = new Uint8Array(documentBuffer);
+
+        console.log('✅ Document generated successfully!');
 
         return new NextResponse(responseBody, {
             headers: {
@@ -142,6 +131,10 @@ function generateMockCompanyData(identifier: string) {
                 { imie: 'Anna', nazwisko: 'Nowak', funkcja: 'CZŁONEK ZARZĄDU' },
             ],
         },
+        wspolnicy: [
+            { nazwa: 'Jan Kowalski', udzialy: 60, wartoscUdzialow: 3000 },
+            { nazwa: 'Anna Nowak', udzialy: 40, wartoscUdzialow: 2000 },
+        ],
         przedmiotDzialalnosci: [
             { kod: '62.01.Z', opis: 'Działalność związana z oprogramowaniem', przewazajaca: true },
             { kod: '62.02.Z', opis: 'Działalność związana z doradztwem w zakresie informatyki', przewazajaca: false },

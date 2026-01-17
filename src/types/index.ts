@@ -49,6 +49,23 @@ export interface KRSCompanyData {
     status: 'AKTYWNY' | 'WYKREŚLONY' | 'ZAWIESZONY';
 }
 
+// Alias for AI pipeline compatibility
+export interface KRSCompany {
+    krs?: string;
+    nip?: string;
+    regon?: string;
+    nazwa?: string;
+    formaOrganizacyjna?: string;
+    siedzibaAdres?: string;
+    kapitalZakladowy?: number;
+    dataPowstania?: string;
+    reprezentacja?: ReprezentantInfo[];
+    sposobReprezentacji?: string;
+    wspolnicy?: WspolnikInfo[];
+    pkd?: PKDInfo[];
+    pkdPrzewazajace?: string;
+}
+
 // Financial Data Types
 export interface FinancialData {
     rok: number;
@@ -75,7 +92,7 @@ export interface RiskFactor {
 export interface MemorandumContext {
     // Company Info
     nazwa_spolki: string;
-    nazwa_skrocona: string;
+    nazwa_skrocona?: string;
     nip: string;
     krs: string;
     regon: string;
@@ -83,9 +100,9 @@ export interface MemorandumContext {
 
     // Address
     adres_pelny: string;
-    ulica: string;
-    kod_pocztowy: string;
-    miejscowosc: string;
+    ulica?: string;
+    kod_pocztowy?: string;
+    miejscowosc?: string;
 
     // Capital
     kapital_zakladowy: string;
@@ -100,18 +117,25 @@ export interface MemorandumContext {
     sposob_reprezentacji: string;
 
     // Business
-    przedmiot_dzialalnosci: PKDInfo[];
+    przedmiot_dzialalnosci?: PKDInfo[];
     pkd_przewazajace: string;
 
     // Financials
     finanse: FinancialData[];
-    przychody_ostatni_rok: string;
-    zysk_ostatni_rok: string;
-    suma_bilansowa: string;
+    przychody_ostatni_rok?: string;
+    zysk_ostatni_rok?: string;
+    suma_bilansowa?: string;
 
-    // AI Analysis
+    // AI Analysis (original)
     ryzyka: RiskFactor[];
     podsumowanie_ai: string;
+
+    // AI-Generated Sections (Phase 2)
+    sekcja_wstep?: string;
+    sekcja_kapital?: string;
+    sekcja_zarzad?: string;
+    sekcja_dzialalnosc?: string;
+    sekcja_finanse?: string;
 }
 
 // API Response Types
@@ -125,3 +149,4 @@ export interface GenerateDocumentResponse {
     documentUrl?: string;
     error?: string;
 }
+
