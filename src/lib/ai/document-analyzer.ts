@@ -1,12 +1,29 @@
 /**
- * Analizator dokumentów - TYLKO GEMINI
- * Gemini z retry logic dla 429 errors
+ * Analizator dokumentów - Firebase Vertex AI
+ * Używa Firebase project z billing dla wyższych limitów
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { initializeApp, getApps, getApp } from 'firebase/app';
+import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
 import { KRSCompany, FinancialData } from '@/types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+// Firebase config
+const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+};
+
+// Initialize Firebase (singleton)
+function getFirebaseApp() {
+    if (getApps().length === 0) {
+        return initializeApp(firebaseConfig);
+    }
+    return getApp();
+}
 
 // Minimalne prompty
 const KRS_PROMPT = `Przeanalizuj odpis KRS i zwróć TYLKO JSON (bez markdown):
@@ -23,15 +40,18 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Analizuje PDF przez Gemini z retry
+ * Analizuje PDF przez Firebase Vertex AI Gemini
  */
 async function analyzeWithGemini(pdfBuffer: Buffer, prompt: string, retries = 3): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    const app = getFirebaseApp();
+    const vertexAI = getVertexAI(app);
+    const model = getGenerativeModel(vertexAI, { model: 'gemini-2.0-flash' });
+
     const base64 = pdfBuffer.toString('base64');
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            console.log(`Gemini attempt ${attempt}/${retries}...`);
+            console.log(`Firebase Vertex AI attempt ${attempt}/${retries}...`);
 
             const result = await model.generateContent([
                 prompt,
@@ -47,16 +67,15 @@ async function analyzeWithGemini(pdfBuffer: Buffer, prompt: string, retries = 3)
             console.log('Gemini response:', text.substring(0, 200));
             return text;
         } catch (error) {
-            const err = error as { status?: number; message?: string };
-            console.error(`Gemini attempt ${attempt} failed:`, err.message || error);
+            const err = error as { message?: string };
+            console.error(`Attempt ${attempt} failed:`, err.message || error);
 
             if (err.message?.includes('429') || err.message?.includes('quota')) {
-                // Rate limit - wait and retry
-                const waitTime = attempt * 35000; // 35s, 70s, 105s
+                const waitTime = attempt * 30000;
                 console.log(`Rate limited, waiting ${waitTime / 1000}s...`);
                 await sleep(waitTime);
             } else if (attempt === retries) {
-                throw new Error(`Gemini API error after ${retries} attempts: ${err.message || 'unknown'}`);
+                throw new Error(`Gemini error: ${err.message || 'unknown'}`);
             } else {
                 await sleep(5000);
             }
@@ -78,18 +97,14 @@ function parseJSON(text: string): Record<string, unknown> {
         throw new Error('Brak JSON w odpowiedzi');
     }
 
-    let jsonStr = jsonMatch[0]
-        .replace(/,\s*}/g, '}')
-        .replace(/,\s*]/g, ']');
-
-    return JSON.parse(jsonStr);
+    return JSON.parse(jsonMatch[0].replace(/,\s*}/g, '}').replace(/,\s*]/g, ']'));
 }
 
 /**
  * Analizuje odpis KRS
  */
 export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
-    console.log('📄 Analyzing KRS document with Gemini...');
+    console.log('📄 Analyzing KRS with Firebase Vertex AI...');
 
     const response = await analyzeWithGemini(pdfBuffer, KRS_PROMPT);
     const d = parseJSON(response) as Record<string, unknown>;
@@ -128,23 +143,17 @@ export async function analyzeFinancialDocument(
 ): Promise<FinancialData[]> {
     console.log('📊 Analyzing financial document...');
 
-    // Excel - parsuj lokalnie (0 API)
     if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return parseExcelFinancials(buffer);
     }
 
-    // PDF - Gemini
     const response = await analyzeWithGemini(buffer, FIN_PROMPT);
 
     try {
         const d = parseJSON(response) as {
             lata?: Array<{
-                rok: number;
-                przychody: number;
-                zysk: number;
-                bilans: number;
-                kapital: number;
-                zobowiazania: number;
+                rok: number; przychody: number; zysk: number;
+                bilans: number; kapital: number; zobowiazania: number;
             }>
         };
 
@@ -164,19 +173,13 @@ export async function analyzeFinancialDocument(
     }
 }
 
-/**
- * Parsuje Excel lokalnie (0 API!)
- */
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
-
-    const sheetName = workbook.SheetNames[0];
-    const sheet = workbook.Sheets[sheetName];
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
     const data = XLSX.utils.sheet_to_json(sheet);
 
     const financials: FinancialData[] = [];
-
     for (const row of data) {
         const r = row as Record<string, unknown>;
         const rok = r['Rok'] || r['rok'] || r['Year'];
@@ -194,6 +197,5 @@ async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
             });
         }
     }
-
     return financials;
 }

@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@firebase/vertexai": "^1.2.4",
     "@google/generative-ai": "^0.24.1",
     "clsx": "^2.1.1",
     "docx": "^9.5.1",
