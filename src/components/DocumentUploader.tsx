@@ -2,14 +2,13 @@
 
 import { useCallback, useState } from 'react';
 import { useDropzone, FileRejection } from 'react-dropzone';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { Upload, FileText, X, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface UploadedFile {
     file: File;
     id: string;
-    status: 'pending' | 'uploading' | 'success' | 'error';
-    error?: string;
+    status: 'success' | 'error';
 }
 
 interface DocumentUploaderProps {
@@ -35,7 +34,7 @@ export default function DocumentUploader({
 
     const onDrop = useCallback((acceptedFiles: File[], rejectedFiles: FileRejection[]) => {
         rejectedFiles.forEach((rejection) => {
-            console.warn('File rejected:', rejection.file.name, rejection.errors);
+            console.warn('File rejected:', rejection.file.name);
         });
 
         const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
@@ -44,9 +43,11 @@ export default function DocumentUploader({
             status: 'success' as const,
         }));
 
+        // Użyj funkcji aktualizującej stan bez wywoływania callback w środku
         setFiles((prev) => {
             const updated = [...prev, ...newFiles].slice(-maxFiles);
-            onFilesChange(updated.map((f) => f.file));
+            // Wywołaj callback po zakończeniu tej funkcji przez setTimeout
+            setTimeout(() => onFilesChange(updated.map((f) => f.file)), 0);
             return updated;
         });
     }, [maxFiles, onFilesChange]);
@@ -54,7 +55,7 @@ export default function DocumentUploader({
     const removeFile = useCallback((id: string) => {
         setFiles((prev) => {
             const updated = prev.filter((f) => f.id !== id);
-            onFilesChange(updated.map((f) => f.file));
+            setTimeout(() => onFilesChange(updated.map((f) => f.file)), 0);
             return updated;
         });
     }, [onFilesChange]);
@@ -85,7 +86,6 @@ export default function DocumentUploader({
                 {required && <span className="text-red-400 ml-1">*</span>}
             </label>
 
-            {/* Dropzone - plain div wrapper to avoid framer-motion type conflicts */}
             <div
                 {...getRootProps()}
                 className={`
@@ -114,7 +114,7 @@ export default function DocumentUploader({
                             'Upuść plik tutaj...'
                         ) : (
                             <>
-                                <span className="text-purple-400">Przeciągnij plik</span> lub kliknij, aby wybrać
+                                <span className="text-purple-400">Przeciągnij plik</span> lub kliknij
                             </>
                         )}
                     </p>
@@ -127,7 +127,6 @@ export default function DocumentUploader({
                 </div>
             </div>
 
-            {/* Uploaded files list */}
             <AnimatePresence mode="popLayout">
                 {files.length > 0 && (
                     <motion.div
@@ -142,20 +141,10 @@ export default function DocumentUploader({
                                 initial={{ opacity: 0, x: -20 }}
                                 animate={{ opacity: 1, x: 0 }}
                                 exit={{ opacity: 0, x: 20 }}
-                                className={`
-                  flex items-center justify-between p-3 rounded-lg
-                  ${uploadedFile.status === 'success' ? 'bg-green-500/10 border border-green-500/30' : ''}
-                  ${uploadedFile.status === 'error' ? 'bg-red-500/10 border border-red-500/30' : ''}
-                  ${uploadedFile.status === 'uploading' ? 'bg-purple-500/10 border border-purple-500/30' : ''}
-                  ${uploadedFile.status === 'pending' ? 'bg-white/5 border border-white/10' : ''}
-                `}
+                                className="flex items-center justify-between p-3 rounded-lg bg-green-500/10 border border-green-500/30"
                             >
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <FileText
-                                        className={`w-5 h-5 flex-shrink-0 ${uploadedFile.status === 'success' ? 'text-green-400' :
-                                                uploadedFile.status === 'error' ? 'text-red-400' : 'text-white/50'
-                                            }`}
-                                    />
+                                    <FileText className="w-5 h-5 text-green-400 flex-shrink-0" />
                                     <div className="min-w-0">
                                         <p className="text-sm text-white/90 truncate">{uploadedFile.file.name}</p>
                                         <p className="text-xs text-white/40">{formatFileSize(uploadedFile.file.size)}</p>
@@ -163,10 +152,7 @@ export default function DocumentUploader({
                                 </div>
 
                                 <div className="flex items-center gap-2">
-                                    {uploadedFile.status === 'success' && <CheckCircle className="w-5 h-5 text-green-400" />}
-                                    {uploadedFile.status === 'uploading' && <Loader2 className="w-5 h-5 text-purple-400 animate-spin" />}
-                                    {uploadedFile.status === 'error' && <AlertCircle className="w-5 h-5 text-red-400" />}
-
+                                    <CheckCircle className="w-5 h-5 text-green-400" />
                                     <button
                                         type="button"
                                         onClick={(e) => {
