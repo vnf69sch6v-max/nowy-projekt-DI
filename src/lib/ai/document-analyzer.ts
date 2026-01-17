@@ -25,9 +25,32 @@ function getFirebaseApp() {
     return getApp();
 }
 
-// Minimalne prompty
-const KRS_PROMPT = `Przeanalizuj odpis KRS i zwróć TYLKO JSON (bez markdown):
-{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
+// Rozszerzony prompt KRS - wyciąga też Radę Nadzorczą
+const KRS_PROMPT = `Przeanalizuj odpis KRS i wyekstrahuj WSZYSTKIE dane. Zwróć TYLKO JSON (bez markdown):
+{
+  "nazwa": "pełna nazwa spółki",
+  "krs": "numer KRS",
+  "nip": "numer NIP",
+  "regon": "numer REGON",
+  "forma": "forma prawna np. SPÓŁKA AKCYJNA",
+  "adres": "pełny adres siedziby",
+  "kapital": 0,
+  "kapital_wplacony": 0,
+  "liczba_akcji": 0,
+  "wartosc_nominalna": 0,
+  "data_rejestracji": "YYYY-MM-DD",
+  "zarzad": [{"imie": "", "nazwisko": "", "funkcja": "PREZES/WICEPREZES/CZŁONEK"}],
+  "rada_nadzorcza": [{"imie": "", "nazwisko": "", "funkcja": "PRZEWODNICZĄCY/CZŁONEK"}],
+  "reprezentacja": "opis sposobu reprezentacji spółki",
+  "akcjonariusze": [{"nazwa": "nazwa akcjonariusza", "udzial": 0, "liczba_akcji": 0}],
+  "pkd": [{"kod": "XX.XX.Z", "opis": "opis działalności"}]
+}
+WAŻNE:
+- Wyciągnij WSZYSTKICH członków zarządu
+- Wyciągnij WSZYSTKICH członków Rady Nadzorczej (jeśli istnieje)
+- Wyciągnij akcjonariuszy posiadających ponad 5% udziałów
+- Kapitał podaj w PLN (nie w groszach)
+- Data rejestracji to data wpisu do KRS`;
 
 // Rozszerzony prompt dla danych finansowych
 const FIN_PROMPT = `Przeanalizuj sprawozdanie finansowe i wyekstrahuj WSZYSTKIE dane liczbowe.
@@ -154,14 +177,25 @@ export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany>
         formaOrganizacyjna: String(d.forma || ''),
         siedzibaAdres: String(d.adres || ''),
         kapitalZakladowy: Number(d.kapital) || 0,
-        dataPowstania: String(d.data || ''),
+        dataPowstania: String(d.data_rejestracji || d.data || ''),
         reprezentacja: Array.isArray(d.zarzad) ? d.zarzad.map((z: { imie?: string; nazwisko?: string; funkcja?: string }) => ({
             imie: z.imie || '',
             nazwisko: z.nazwisko || '',
             funkcja: z.funkcja || '',
         })) : [],
+        radaNadzorcza: Array.isArray(d.rada_nadzorcza) ? d.rada_nadzorcza.map((r: { imie?: string; nazwisko?: string; funkcja?: string }) => ({
+            imie: r.imie || '',
+            nazwisko: r.nazwisko || '',
+            funkcja: r.funkcja || '',
+        })) : [],
         sposobReprezentacji: String(d.reprezentacja || ''),
-        wspolnicy: [],
+        wspolnicy: Array.isArray(d.akcjonariusze) ? d.akcjonariusze.map((a: { nazwa?: string; udzial?: number; liczba_akcji?: number }) => ({
+            nazwa: a.nazwa || '',
+            udzialy: a.udzial || 0,
+            wartoscUdzialow: a.liczba_akcji || 0,
+        })) : [],
+        liczbaAkcji: Number(d.liczba_akcji) || 0,
+        wartoscNominalnaAkcji: Number(d.wartosc_nominalna) || 0,
         pkd: Array.isArray(d.pkd) ? d.pkd.map((p: { kod?: string; opis?: string }) => ({
             kod: p.kod || '',
             opis: p.opis || '',

@@ -417,6 +417,94 @@ export async function generateProfessionalPDF(
 
         y -= 5;
         drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
+
+        // ========================================
+        // WYKRES SŁUPKOWY - Przychody i Zysk
+        // ========================================
+
+        if (financials.length >= 2) {
+            y -= 30;
+
+            if (y < MARGIN + 150) {
+                addPageFooter(currentPage, pageNum, font);
+                currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                y = PAGE_HEIGHT - MARGIN;
+                pageNum++;
+            }
+
+            currentPage.drawText('WYKRES: Przychody vs Zysk netto', {
+                x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.2, 0.2, 0.3)
+            });
+            y -= 20;
+
+            const chartHeight = 80;
+            const chartWidth = CONTENT_WIDTH - 40;
+            const barWidth = Math.min(40, (chartWidth / financials.length) - 10);
+
+            // Znajdź max wartość dla skalowania
+            const maxVal = Math.max(...financials.map(f => Math.max(f.przychodyNetto || 0, f.zyskNetto || 0)));
+
+            if (maxVal > 0) {
+                // Tło wykresu
+                currentPage.drawRectangle({
+                    x: MARGIN + 20,
+                    y: y - chartHeight,
+                    width: chartWidth,
+                    height: chartHeight,
+                    color: rgb(0.98, 0.98, 0.99),
+                    borderColor: rgb(0.9, 0.9, 0.9),
+                    borderWidth: 0.5,
+                });
+
+                // Rysuj słupki
+                for (let i = 0; i < financials.length; i++) {
+                    const fin = financials[i];
+                    const xBase = MARGIN + 40 + i * (chartWidth / financials.length);
+
+                    // Przychody (niebieski)
+                    const heightP = ((fin.przychodyNetto || 0) / maxVal) * (chartHeight - 15);
+                    if (heightP > 0) {
+                        currentPage.drawRectangle({
+                            x: xBase,
+                            y: y - chartHeight + 5,
+                            width: barWidth * 0.45,
+                            height: heightP,
+                            color: rgb(0.3, 0.5, 0.8),
+                        });
+                    }
+
+                    // Zysk (zielony)
+                    const heightZ = ((fin.zyskNetto || 0) / maxVal) * (chartHeight - 15);
+                    if (heightZ > 0) {
+                        currentPage.drawRectangle({
+                            x: xBase + barWidth * 0.5,
+                            y: y - chartHeight + 5,
+                            width: barWidth * 0.45,
+                            height: heightZ,
+                            color: rgb(0.3, 0.7, 0.4),
+                        });
+                    }
+
+                    // Rok label
+                    currentPage.drawText(fin.rok.toString(), {
+                        x: xBase + barWidth * 0.2,
+                        y: y - chartHeight - 12,
+                        size: 8,
+                        font,
+                        color: rgb(0.4, 0.4, 0.4),
+                    });
+                }
+
+                // Legenda
+                y -= chartHeight + 25;
+                currentPage.drawRectangle({ x: MARGIN + 20, y: y + 3, width: 10, height: 8, color: rgb(0.3, 0.5, 0.8) });
+                currentPage.drawText('Przychody', { x: MARGIN + 35, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+                currentPage.drawRectangle({ x: MARGIN + 100, y: y + 3, width: 10, height: 8, color: rgb(0.3, 0.7, 0.4) });
+                currentPage.drawText('Zysk netto', { x: MARGIN + 115, y, size: 8, font, color: rgb(0.4, 0.4, 0.4) });
+
+                y -= 20;
+            }
+        }
     }
 
     // ========================================

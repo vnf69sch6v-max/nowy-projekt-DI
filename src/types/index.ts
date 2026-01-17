@@ -60,8 +60,11 @@ export interface KRSCompany {
     kapitalZakladowy?: number;
     dataPowstania?: string;
     reprezentacja?: ReprezentantInfo[];
+    radaNadzorcza?: ReprezentantInfo[];
     sposobReprezentacji?: string;
     wspolnicy?: WspolnikInfo[];
+    liczbaAkcji?: number;
+    wartoscNominalnaAkcji?: number;
     pkd?: PKDInfo[];
     pkdPrzewazajace?: string;
 }
