@@ -3,7 +3,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import DocumentUploader from './DocumentUploader';
 import OfferParametersForm, { OfferParameters } from './OfferParametersForm';
-import { Sparkles, Download, Loader2, CheckCircle, AlertCircle, FileText, Eye, Edit3, X } from 'lucide-react';
+import { Sparkles, Download, Loader2, CheckCircle, AlertCircle, FileText, Eye, Edit3, X, FileType } from 'lucide-react';
 import { KRSCompany, FinancialData, OfferDocumentData } from '@/types';
 
 // Progress sections
@@ -173,6 +173,39 @@ export default function MemorandumGenerator() {
         }
     }, [generatedContent, companyData, financialsData, offerParams, offerData, getEditedContent]);
 
+    const handleDownloadDocx = useCallback(async () => {
+        if (!companyData || !generatedContent) return;
+
+        const finalContent = getEditedContent();
+        setIsDownloading(true);
+
+        try {
+            const response = await fetch('/api/generate-docx', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: finalContent,
+                    company: companyData,
+                    financials: financialsData,
+                }),
+            });
+
+            if (!response.ok) throw new Error('DOCX generation failed');
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Memorandum_${companyData.nazwa?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'}.docx`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Błąd pobierania DOCX');
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [generatedContent, companyData, financialsData, getEditedContent]);
+
     const updateField = (id: string, value: string) => {
         setEditableFields(prev => prev.map(f => f.id === id ? { ...f, value } : f));
     };
@@ -251,8 +284,8 @@ export default function MemorandumGenerator() {
                                         <div
                                             key={section.id}
                                             className={`flex-1 h-1 rounded-full transition-all ${idx <= SECTION_NAMES.findIndex(s => s.id === currentSection)
-                                                    ? 'bg-gradient-to-r from-pink-500 to-orange-400'
-                                                    : 'bg-white/10'
+                                                ? 'bg-gradient-to-r from-pink-500 to-orange-400'
+                                                : 'bg-white/10'
                                                 }`}
                                             title={section.name}
                                         />
@@ -301,6 +334,18 @@ export default function MemorandumGenerator() {
                                             <Download className="w-4 h-4" />
                                         )}
                                         PDF
+                                    </button>
+                                    <button
+                                        onClick={handleDownloadDocx}
+                                        disabled={isDownloading}
+                                        className="flex-1 py-3 px-4 rounded-xl font-medium flex items-center justify-center gap-2 bg-gradient-to-r from-blue-500 to-indigo-500 text-white hover:opacity-90 disabled:opacity-50"
+                                    >
+                                        {isDownloading ? (
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                        ) : (
+                                            <FileType className="w-4 h-4" />
+                                        )}
+                                        DOCX
                                     </button>
                                 </div>
                             </div>
