@@ -1,180 +1,106 @@
 /**
- * Analizator dokumentów przez Gemini Vision
- * Z retry logic i obsługą rate limiting
+ * Analizator dokumentów - Claude Sonnet dla ekstrakcji, minimalne zużycie tokenów
+ * Claude obsługuje PDF przez base64 w vision
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 import { KRSCompany, FinancialData } from '@/types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
-
-// Konfiguracja modelu
-const model = genAI.getGenerativeModel({
-    model: 'gemini-2.0-flash',
-    generationConfig: {
-        temperature: 0.1,
-        maxOutputTokens: 4096,
-    },
+const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-// Rate limiting
-const MAX_RETRIES = 3;
-const BASE_DELAY_MS = 5000; // 5 sekund
-
-function delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
-}
+// Używamy Haiku dla minimalnych kosztów, Sonnet jako fallback
+const MODEL = 'claude-3-5-haiku-20241022'; // Najtańszy, szybki
 
 /**
- * Wrapper z retry i exponential backoff
+ * Prompt do ekstrakcji KRS - BARDZO KRÓTKI dla oszczędności tokenów
  */
-async function callGeminiWithRetry<T>(
-    operation: () => Promise<T>,
-    operationName: string,
-    attempt: number = 1
-): Promise<T> {
-    try {
-        return await operation();
-    } catch (error: unknown) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-
-        if (errorMessage.includes('429') || errorMessage.includes('Too Many Requests') || errorMessage.includes('quota')) {
-            if (attempt < MAX_RETRIES) {
-                const waitTime = BASE_DELAY_MS * Math.pow(2, attempt - 1);
-                console.warn(`⏳ Rate limit hit for ${operationName}, waiting ${waitTime / 1000}s before retry ${attempt + 1}/${MAX_RETRIES}...`);
-                await delay(waitTime);
-                return callGeminiWithRetry(operation, operationName, attempt + 1);
-            }
-
-            // Po wyczerpaniu prób - zwróć przyjazny komunikat
-            throw new Error(`Przekroczono limit API Gemini. Poczekaj kilka minut i spróbuj ponownie. (Pozostała przerwa: ~45 sekund)`);
-        }
-
-        throw error;
-    }
-}
+const KRS_PROMPT = `Z tego odpisu KRS wyodrębnij JSON:
+{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"data_powstania":"","zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","wspolnicy":[{"nazwa":"","udzialy":0}],"pkd":[{"kod":"","opis":"","glowny":true}]}
+Tylko JSON.`;
 
 /**
- * Prompt do ekstrakcji danych z odpisu KRS
+ * Prompt do ekstrakcji finansów - KRÓTKI
  */
-const KRS_EXTRACTION_PROMPT = `
-Przeanalizuj załączony dokument - odpis z Krajowego Rejestru Sądowego.
-Wyekstrahuj wszystkie dostępne dane i zwróć je w formacie JSON.
-
-WYMAGANY FORMAT (tylko JSON, bez markdown):
-{
-  "nazwa": "pełna nazwa spółki",
-  "krs": "numer KRS",
-  "nip": "numer NIP",
-  "regon": "numer REGON",
-  "forma_prawna": "np. SPÓŁKA Z OGRANICZONĄ ODPOWIEDZIALNOŚCIĄ",
-  "adres": {
-    "ulica": "nazwa ulicy z numerem",
-    "kod_pocztowy": "XX-XXX",
-    "miejscowosc": "miasto"
-  },
-  "kapital_zakladowy": 5000,
-  "data_powstania": "YYYY-MM-DD",
-  "zarzad": [
-    { "imie": "Jan", "nazwisko": "Kowalski", "funkcja": "PREZES ZARZĄDU" }
-  ],
-  "sposob_reprezentacji": "opis",
-  "wspolnicy": [
-    { "nazwa": "Jan Kowalski", "udzialy_procent": 50 }
-  ],
-  "pkd": [
-    { "kod": "62.01.Z", "opis": "Działalność związana z oprogramowaniem", "przewazajace": true }
-  ]
-}
-
-Zwróć TYLKO JSON.
-`;
+const FIN_PROMPT = `Wyodrębnij dane finansowe jako JSON:
+{"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}
+Tylko JSON.`;
 
 /**
- * Prompt do ekstrakcji danych finansowych
- */
-const FINANCIAL_EXTRACTION_PROMPT = `
-Przeanalizuj załączony dokument - sprawozdanie finansowe.
-Wyekstrahuj dane finansowe dla każdego roku.
-
-WYMAGANY FORMAT (tylko JSON):
-{
-  "lata": [
-    {
-      "rok": 2024,
-      "przychody_netto": 1000000,
-      "zysk_netto": 120000,
-      "suma_bilansowa": 2000000,
-      "kapital_wlasny": 500000,
-      "zobowiazania": 1500000
-    }
-  ]
-}
-
-Wszystkie wartości w PLN. Zwróć TYLKO JSON.
-`;
-
-/**
- * Analizuje odpis KRS
+ * Analizuje odpis KRS przez Claude Vision
  */
 export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
-    console.log('📄 Analyzing KRS document with Gemini Vision...');
+    console.log('📄 Analyzing KRS with Claude...');
 
     const base64 = pdfBuffer.toString('base64');
 
-    const operation = async () => {
-        const result = await model.generateContent([
-            KRS_EXTRACTION_PROMPT,
-            {
-                inlineData: {
-                    mimeType: 'application/pdf',
-                    data: base64,
+    try {
+        const response = await anthropic.messages.create({
+            model: MODEL,
+            max_tokens: 1024, // Ograniczenie dla oszczędności
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'document',
+                            source: {
+                                type: 'base64',
+                                media_type: 'application/pdf',
+                                data: base64,
+                            },
+                        },
+                        {
+                            type: 'text',
+                            text: KRS_PROMPT,
+                        },
+                    ],
                 },
-            },
-        ]);
-        return result.response.text();
-    };
+            ],
+        });
 
-    const responseText = await callGeminiWithRetry(operation, 'KRS analysis');
-    console.log('Raw KRS response:', responseText.substring(0, 300));
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
+        console.log('Claude KRS response:', text.substring(0, 200));
 
-    // Wyciągnij JSON
-    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-        throw new Error('Nie udało się wyekstrahować danych z dokumentu KRS. Upewnij się, że to poprawny odpis.');
+        // Wyciągnij JSON
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+            throw new Error('Nie udało się wyekstrahować danych z KRS');
+        }
+
+        const d = JSON.parse(jsonMatch[0]);
+
+        return {
+            krs: d.krs || '',
+            nip: d.nip || '',
+            regon: d.regon || '',
+            nazwa: d.nazwa || 'Nieznana spółka',
+            formaOrganizacyjna: d.forma || '',
+            siedzibaAdres: d.adres || '',
+            kapitalZakladowy: d.kapital || 0,
+            dataPowstania: d.data_powstania || '',
+            reprezentacja: (d.zarzad || []).map((z: { imie: string; nazwisko: string; funkcja: string }) => ({
+                imie: z.imie,
+                nazwisko: z.nazwisko,
+                funkcja: z.funkcja,
+            })),
+            sposobReprezentacji: d.reprezentacja || '',
+            wspolnicy: (d.wspolnicy || []).map((w: { nazwa: string; udzialy?: number }) => ({
+                nazwa: w.nazwa,
+                udzialy: w.udzialy,
+            })),
+            pkd: (d.pkd || []).map((p: { kod: string; opis: string; glowny?: boolean }) => ({
+                kod: p.kod,
+                opis: p.opis,
+                przewazajaca: p.glowny || false,
+            })),
+            pkdPrzewazajace: d.pkd?.find((p: { glowny?: boolean }) => p.glowny)?.opis || d.pkd?.[0]?.opis || '',
+        };
+    } catch (error) {
+        console.error('Claude KRS error:', error);
+        throw new Error(`Błąd analizy KRS: ${error instanceof Error ? error.message : 'nieznany błąd'}`);
     }
-
-    const data = JSON.parse(jsonMatch[0]);
-
-    return {
-        krs: data.krs || '',
-        nip: data.nip || '',
-        regon: data.regon || '',
-        nazwa: data.nazwa || 'Nieznana spółka',
-        formaOrganizacyjna: data.forma_prawna || '',
-        siedzibaAdres: data.adres
-            ? `${data.adres.ulica || ''}, ${data.adres.kod_pocztowy || ''} ${data.adres.miejscowosc || ''}`
-            : '',
-        kapitalZakladowy: data.kapital_zakladowy || 0,
-        dataPowstania: data.data_powstania || '',
-        reprezentacja: (data.zarzad || []).map((z: { imie: string; nazwisko: string; funkcja: string }) => ({
-            imie: z.imie,
-            nazwisko: z.nazwisko,
-            funkcja: z.funkcja,
-        })),
-        sposobReprezentacji: data.sposob_reprezentacji || '',
-        wspolnicy: (data.wspolnicy || []).map((w: { nazwa: string; udzialy_procent?: number; wartosc_udzialow?: number }) => ({
-            nazwa: w.nazwa,
-            udzialy: w.udzialy_procent,
-            wartoscUdzialow: w.wartosc_udzialow,
-        })),
-        pkd: (data.pkd || []).map((p: { kod: string; opis: string; przewazajace?: boolean }) => ({
-            kod: p.kod,
-            opis: p.opis,
-            przewazajaca: p.przewazajace || false,
-        })),
-        pkdPrzewazajace: data.pkd?.find((p: { przewazajace?: boolean }) => p.przewazajace)?.opis || data.pkd?.[0]?.opis || '',
-    };
 }
 
 /**
@@ -186,68 +112,76 @@ export async function analyzeFinancialDocument(
 ): Promise<FinancialData[]> {
     console.log('📊 Analyzing financial document...');
 
-    // Dla Excel - parsuj lokalnie (bez API call)
+    // Dla Excel - parsuj lokalnie bez API
     if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return parseExcelFinancials(buffer);
     }
 
-    // Dla PDF - użyj Gemini Vision z retry
+    // Dla PDF - użyj Claude
     const base64 = buffer.toString('base64');
 
-    const operation = async () => {
-        const result = await model.generateContent([
-            FINANCIAL_EXTRACTION_PROMPT,
-            {
-                inlineData: {
-                    mimeType: 'application/pdf',
-                    data: base64,
-                },
-            },
-        ]);
-        return result.response.text();
-    };
-
     try {
-        const responseText = await callGeminiWithRetry(operation, 'Financial analysis');
-        console.log('Raw financial response:', responseText.substring(0, 300));
+        const response = await anthropic.messages.create({
+            model: MODEL,
+            max_tokens: 1024,
+            messages: [
+                {
+                    role: 'user',
+                    content: [
+                        {
+                            type: 'document',
+                            source: {
+                                type: 'base64',
+                                media_type: 'application/pdf',
+                                data: base64,
+                            },
+                        },
+                        {
+                            type: 'text',
+                            text: FIN_PROMPT,
+                        },
+                    ],
+                },
+            ],
+        });
 
-        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        const text = response.content[0].type === 'text' ? response.content[0].text : '';
+        console.log('Claude financial response:', text.substring(0, 200));
+
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-            console.warn('Could not extract financial data from PDF');
+            console.warn('Could not extract financial data');
             return [];
         }
 
         const data = JSON.parse(jsonMatch[0]);
 
-        return (data.lata || []).map((year: {
+        return (data.lata || []).map((y: {
             rok: number;
-            przychody_netto: number;
-            zysk_brutto?: number;
-            zysk_netto: number;
-            suma_bilansowa: number;
-            kapital_wlasny: number;
+            przychody: number;
+            zysk: number;
+            bilans: number;
+            kapital: number;
             zobowiazania: number;
-            aktywa_obrotowe?: number;
-            aktywa_trwale?: number;
         }) => ({
-            rok: year.rok,
-            przychodyNetto: year.przychody_netto || 0,
-            zyskBrutto: year.zysk_brutto || year.zysk_netto || 0,
-            zyskNetto: year.zysk_netto || 0,
-            sumaBilansowa: year.suma_bilansowa || 0,
-            kapitalWlasny: year.kapital_wlasny || 0,
-            zobowiazania: year.zobowiazania || 0,
-            aktywaObrotowe: year.aktywa_obrotowe || 0,
-            aktywaTrwale: year.aktywa_trwale || 0,
+            rok: y.rok,
+            przychodyNetto: y.przychody || 0,
+            zyskBrutto: y.zysk || 0,
+            zyskNetto: y.zysk || 0,
+            sumaBilansowa: y.bilans || 0,
+            kapitalWlasny: y.kapital || 0,
+            zobowiazania: y.zobowiazania || 0,
+            aktywaObrotowe: 0,
+            aktywaTrwale: 0,
         }));
     } catch (error) {
-        console.error('Financial analysis failed:', error);
-        return []; // Zwróć pustą tablicę - użyje mock
+        console.error('Claude financial error:', error);
+        return []; // Fallback do mock
     }
 }
 
 /**
- * Parsuje Excel lokalnie (bez API)
+ * Parsuje Excel lokalnie
  */
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');
@@ -256,8 +190,6 @@ async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const sheetName = workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
     const data = XLSX.utils.sheet_to_json(sheet);
-
-    console.log('Excel data rows:', data.length);
 
     const financials: FinancialData[] = [];
 
@@ -268,13 +200,13 @@ async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
             financials.push({
                 rok: rok,
                 przychodyNetto: Number(r['Przychody'] || r['przychody_netto'] || 0),
-                zyskBrutto: Number(r['Zysk brutto'] || r['zysk_brutto'] || 0),
+                zyskBrutto: Number(r['Zysk brutto'] || 0),
                 zyskNetto: Number(r['Zysk netto'] || r['zysk_netto'] || 0),
-                sumaBilansowa: Number(r['Suma bilansowa'] || r['suma_bilansowa'] || 0),
-                kapitalWlasny: Number(r['Kapitał własny'] || r['kapital_wlasny'] || 0),
-                zobowiazania: Number(r['Zobowiązania'] || r['zobowiazania'] || 0),
-                aktywaObrotowe: Number(r['Aktywa obrotowe'] || 0),
-                aktywaTrwale: Number(r['Aktywa trwałe'] || 0),
+                sumaBilansowa: Number(r['Suma bilansowa'] || 0),
+                kapitalWlasny: Number(r['Kapitał własny'] || 0),
+                zobowiazania: Number(r['Zobowiązania'] || 0),
+                aktywaObrotowe: 0,
+                aktywaTrwale: 0,
             });
         }
     }
