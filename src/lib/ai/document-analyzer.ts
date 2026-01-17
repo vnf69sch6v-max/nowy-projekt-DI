@@ -1,134 +1,117 @@
 /**
- * Analizator dokumentów - Claude dla ekstrakcji, minimalne zużycie tokenów
+ * Analizator dokumentów - ZOPTYMALIZOWANY
+ * 1. pdf-parse do ekstrakcji tekstu (0 tokenów)
+ * 2. Gemini do analizy (darmowy tier)
+ * 3. Claude tylko gdy Gemini nie działa
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { KRSCompany, FinancialData } from '@/types';
 
-const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY || '',
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
-// Claude Sonnet 4 - obsługuje PDF
-const MODEL = 'claude-sonnet-4-20250514';
+// Minimalne prompty dla oszczędności tokenów
+const KRS_PROMPT = `Wyekstrahuj dane z odpisu KRS. Zwróć TYLKO JSON:
+{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"data":"","zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
 
-/**
- * Krótki prompt KRS dla minimalnego zużycia
- */
-const KRS_PROMPT = `Wyodrębnij z odpisu KRS dane w JSON:
-{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"data_powstania":"","zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","wspolnicy":[{"nazwa":"","udzialy":0}],"pkd":[{"kod":"","opis":"","glowny":true}]}
-Zwróć tylko JSON.`;
+const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON:
+{"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}`;
 
 /**
- * Krótki prompt finansowy
+ * Ekstrakcja tekstu z PDF (0 tokenów!)
  */
-const FIN_PROMPT = `Wyodrębnij dane finansowe jako JSON:
-{"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}
-Tylko JSON.`;
+async function extractTextFromPDF(buffer: Buffer): Promise<string> {
+    try {
+        // Dynamic import for pdf-parse
+        const pdfParseModule = await import('pdf-parse');
+        // Try different ways to access the function
+        const pdfParse = typeof pdfParseModule === 'function'
+            ? pdfParseModule
+            : (pdfParseModule as { default?: unknown }).default || pdfParseModule;
+
+        const data = await (pdfParse as (buffer: Buffer) => Promise<{ text: string }>)(buffer);
+        console.log(`📄 Extracted ${data.text.length} characters from PDF`);
+        return data.text;
+    } catch (error) {
+        console.error('PDF parse error:', error);
+        throw new Error('Nie udało się odczytać PDF. Sprawdź czy plik nie jest zabezpieczony.');
+    }
+}
 
 /**
- * Analizuje odpis KRS przez Claude
+ * Analizuje tekst przez Gemini (darmowy tier!)
  */
-export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
-    console.log('📄 Analyzing KRS with Claude Haiku...');
+async function analyzeWithGemini(text: string, prompt: string): Promise<string> {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
-    const base64 = pdfBuffer.toString('base64');
+    // Ogranicz tekst do 10000 znaków dla oszczędności
+    const truncatedText = text.slice(0, 10000);
 
     try {
-        const response = await anthropic.messages.create({
-            model: MODEL,
-            max_tokens: 1024,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'document',
-                            source: {
-                                type: 'base64',
-                                media_type: 'application/pdf',
-                                data: base64,
-                            },
-                        },
-                        {
-                            type: 'text',
-                            text: KRS_PROMPT,
-                        },
-                    ],
-                },
-            ],
-        });
-
-        const text = response.content[0].type === 'text' ? response.content[0].text : '';
-        console.log('Claude response:', text.substring(0, 500));
-
-        // Wyczyść i napraw JSON
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-        if (!jsonMatch) {
-            throw new Error('Nie udało się wyekstrahować danych z KRS');
-        }
-
-        let jsonStr = jsonMatch[0];
-
-        // Napraw częste problemy z JSON od Claude
-        jsonStr = jsonStr
-            .replace(/,\s*}/g, '}')  // Usuwaj trailing commas przed }
-            .replace(/,\s*]/g, ']')  // Usuwaj trailing commas przed ]
-            .replace(/'/g, '"')      // Zamień single quotes na double
-            .replace(/\n/g, ' ')     // Usuń newlines wewnątrz
-            .replace(/\r/g, '')      // Usuń carriage returns
-            .replace(/\t/g, ' ')     // Usuń taby
-            .replace(/"\s+"/g, '","')  // Napraw brakujące przecinki między stringami
-            .replace(/}\s*{/g, '},{'); // Napraw brakujące przecinki między obiektami
-
-        let d;
-        try {
-            d = JSON.parse(jsonStr);
-        } catch (parseError) {
-            console.error('JSON parse error, trying fallback:', parseError);
-            console.error('Problematic JSON:', jsonStr.substring(0, 500));
-
-            // Fallback - spróbuj wyekstrahować kluczowe dane regexem
-            const nazwa = text.match(/"nazwa"\s*:\s*"([^"]+)"/)?.[1] || 'Nieznana spółka';
-            const krs = text.match(/"krs"\s*:\s*"([^"]+)"/)?.[1] || '';
-            const nip = text.match(/"nip"\s*:\s*"([^"]+)"/)?.[1] || '';
-            const regon = text.match(/"regon"\s*:\s*"([^"]+)"/)?.[1] || '';
-            const forma = text.match(/"forma"\s*:\s*"([^"]+)"/)?.[1] || '';
-            const adres = text.match(/"adres"\s*:\s*"([^"]+)"/)?.[1] || '';
-
-            d = { nazwa, krs, nip, regon, forma, adres, zarzad: [], wspolnicy: [], pkd: [] };
-        }
-
-        return {
-            krs: d.krs || '',
-            nip: d.nip || '',
-            regon: d.regon || '',
-            nazwa: d.nazwa || 'Nieznana spółka',
-            formaOrganizacyjna: d.forma || '',
-            siedzibaAdres: d.adres || '',
-            kapitalZakladowy: d.kapital || 0,
-            dataPowstania: d.data_powstania || '',
-            reprezentacja: (d.zarzad || []).map((z: { imie: string; nazwisko: string; funkcja: string }) => ({
-                imie: z.imie || '',
-                nazwisko: z.nazwisko || '',
-                funkcja: z.funkcja || '',
-            })),
-            sposobReprezentacji: d.reprezentacja || '',
-            wspolnicy: (d.wspolnicy || []).map((w: { nazwa: string; udzialy?: number }) => ({
-                nazwa: w.nazwa || '',
-                udzialy: w.udzialy,
-            })),
-            pkd: (d.pkd || []).map((p: { kod: string; opis: string; glowny?: boolean }) => ({
-                kod: p.kod || '',
-                opis: p.opis || '',
-                przewazajaca: p.glowny || false,
-            })),
-            pkdPrzewazajace: d.pkd?.find((p: { glowny?: boolean }) => p.glowny)?.opis || d.pkd?.[0]?.opis || '',
-        };
+        const result = await model.generateContent(`${prompt}\n\nTEKST:\n${truncatedText}`);
+        return result.response.text();
     } catch (error) {
-        console.error('Claude error:', error);
-        throw new Error(`Błąd analizy KRS: ${error instanceof Error ? error.message : 'nieznany'}`);
+        console.error('Gemini error:', error);
+        throw error;
     }
+}
+
+/**
+ * Parsuje JSON z odpowiedzi AI
+ */
+function parseJSON(text: string): Record<string, unknown> {
+    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    if (!jsonMatch) {
+        throw new Error('Brak JSON w odpowiedzi AI');
+    }
+
+    let jsonStr = jsonMatch[0]
+        .replace(/,\s*}/g, '}')
+        .replace(/,\s*]/g, ']')
+        .replace(/'/g, '"');
+
+    return JSON.parse(jsonStr);
+}
+
+/**
+ * Analizuje odpis KRS
+ */
+export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
+    console.log('📄 Analyzing KRS document...');
+
+    // 1. Ekstrakcja tekstu (0 tokenów)
+    const text = await extractTextFromPDF(pdfBuffer);
+
+    // 2. Analiza przez Gemini (darmowy)
+    const response = await analyzeWithGemini(text, KRS_PROMPT);
+    console.log('Gemini response:', response.substring(0, 200));
+
+    // 3. Parsowanie
+    const d = parseJSON(response) as Record<string, unknown>;
+
+    return {
+        krs: String(d.krs || ''),
+        nip: String(d.nip || ''),
+        regon: String(d.regon || ''),
+        nazwa: String(d.nazwa || 'Nieznana spółka'),
+        formaOrganizacyjna: String(d.forma || ''),
+        siedzibaAdres: String(d.adres || ''),
+        kapitalZakladowy: Number(d.kapital) || 0,
+        dataPowstania: String(d.data || ''),
+        reprezentacja: Array.isArray(d.zarzad) ? d.zarzad.map((z: { imie?: string; nazwisko?: string; funkcja?: string }) => ({
+            imie: z.imie || '',
+            nazwisko: z.nazwisko || '',
+            funkcja: z.funkcja || '',
+        })) : [],
+        sposobReprezentacji: String(d.reprezentacja || ''),
+        wspolnicy: [],
+        pkd: Array.isArray(d.pkd) ? d.pkd.map((p: { kod?: string; opis?: string }) => ({
+            kod: p.kod || '',
+            opis: p.opis || '',
+            przewazajaca: false,
+        })) : [],
+        pkdPrzewazajace: Array.isArray(d.pkd) && d.pkd.length > 0 ? d.pkd[0]?.opis || '' : '',
+    };
 }
 
 /**
@@ -140,54 +123,28 @@ export async function analyzeFinancialDocument(
 ): Promise<FinancialData[]> {
     console.log('📊 Analyzing financial document...');
 
-    // Excel - parsuj lokalnie
+    // Excel - parsuj lokalnie (0 tokenów!)
     if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return parseExcelFinancials(buffer);
     }
 
-    // PDF - użyj Claude
-    const base64 = buffer.toString('base64');
+    // PDF - ekstrakcja tekstu + Gemini
+    const text = await extractTextFromPDF(buffer);
+    const response = await analyzeWithGemini(text, FIN_PROMPT);
 
     try {
-        const response = await anthropic.messages.create({
-            model: MODEL,
-            max_tokens: 1024,
-            messages: [
-                {
-                    role: 'user',
-                    content: [
-                        {
-                            type: 'document',
-                            source: {
-                                type: 'base64',
-                                media_type: 'application/pdf',
-                                data: base64,
-                            },
-                        },
-                        {
-                            type: 'text',
-                            text: FIN_PROMPT,
-                        },
-                    ],
-                },
-            ],
-        });
+        const d = parseJSON(response) as {
+            lata?: Array<{
+                rok: number;
+                przychody: number;
+                zysk: number;
+                bilans: number;
+                kapital: number;
+                zobowiazania: number;
+            }>
+        };
 
-        const text = response.content[0].type === 'text' ? response.content[0].text : '';
-        const jsonMatch = text.match(/\{[\s\S]*\}/);
-
-        if (!jsonMatch) return [];
-
-        const data = JSON.parse(jsonMatch[0]);
-
-        return (data.lata || []).map((y: {
-            rok: number;
-            przychody: number;
-            zysk: number;
-            bilans: number;
-            kapital: number;
-            zobowiazania: number;
-        }) => ({
+        return (d.lata || []).map(y => ({
             rok: y.rok,
             przychodyNetto: y.przychody || 0,
             zyskBrutto: y.zysk || 0,
@@ -198,14 +155,14 @@ export async function analyzeFinancialDocument(
             aktywaObrotowe: 0,
             aktywaTrwale: 0,
         }));
-    } catch (error) {
-        console.error('Financial analysis error:', error);
+    } catch {
+        console.error('Failed to parse financials, returning empty');
         return [];
     }
 }
 
 /**
- * Parsuje Excel lokalnie
+ * Parsuje Excel lokalnie (0 tokenów!)
  */
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');

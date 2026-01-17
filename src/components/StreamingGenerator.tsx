@@ -143,12 +143,24 @@ export default function StreamingGenerator() {
         }
     }, [krsFile, financialFile]);
 
-    const handleDownload = useCallback(() => {
+    const handleDownloadTxt = useCallback(() => {
         const blob = new Blob([generatedContent], { type: 'text/plain' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
         a.download = `Memorandum_${companyName?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'}_${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    }, [generatedContent, companyName]);
+
+    const handleDownloadPdf = useCallback(async () => {
+        const { generateMemorandumPDF } = await import('@/lib/documents/pdf-generator');
+        const pdfBytes = await generateMemorandumPDF(generatedContent, companyName || 'Spółka');
+        const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `Memorandum_${companyName?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'}_${Date.now()}.pdf`;
         a.click();
         URL.revokeObjectURL(url);
     }, [generatedContent, companyName]);
@@ -256,17 +268,28 @@ export default function StreamingGenerator() {
                             )}
                         </AnimatePresence>
 
-                        {/* Download button */}
+                        {/* Download buttons */}
                         {isComplete && (
-                            <motion.button
-                                initial={{ opacity: 0, y: 10 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                onClick={handleDownload}
-                                className="w-full mt-4 py-3 px-6 bg-green-500/20 border border-green-500/50 text-green-400 rounded-xl hover:bg-green-500/30 transition-colors flex items-center justify-center gap-2"
-                            >
-                                <Download className="w-5 h-5" />
-                                Pobierz dokument (.txt)
-                            </motion.button>
+                            <div className="mt-4 space-y-2">
+                                <motion.button
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    onClick={handleDownloadPdf}
+                                    className="w-full py-3 px-6 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all flex items-center justify-center gap-2"
+                                >
+                                    <Download className="w-5 h-5" />
+                                    Pobierz PDF
+                                </motion.button>
+                                <motion.button
+                                    initial={{ opacity: 0, y: 10 }}
+                                    animate={{ opacity: 1, y: 0, transition: { delay: 0.1 } }}
+                                    onClick={handleDownloadTxt}
+                                    className="w-full py-2 px-6 bg-white/5 border border-white/20 text-white/70 rounded-xl hover:bg-white/10 transition-colors flex items-center justify-center gap-2 text-sm"
+                                >
+                                    <FileText className="w-4 h-4" />
+                                    Pobierz TXT
+                                </motion.button>
+                            </div>
                         )}
                     </div>
 
@@ -320,7 +343,7 @@ export default function StreamingGenerator() {
             {/* Info */}
             <div className="mt-6 text-center text-xs text-white/40">
                 <p>Struktura zgodna z rozporządzeniem Dz.U. 2020.1053 (§7-§17)</p>
-                <p className="mt-1">Claude Sonnet 4 • Streaming • Real-time</p>
+                <p className="mt-1">Gemini 2.0 Flash (darmowy) • Streaming • Real-time</p>
             </div>
         </div>
     );
