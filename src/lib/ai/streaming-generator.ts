@@ -7,7 +7,21 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
 import { KRSCompany, FinancialData } from '@/types';
-import { verifyContent, VerificationResult } from './content-verifier';
+import { verifyContent } from './content-verifier';
+
+// Typ dla parametrów oferty
+export interface OfferParameters {
+    seriaAkcji?: string;
+    liczbaAkcji?: number | null;
+    wartoscNominalna?: number | null;
+    cenaEmisyjna?: number | null;
+    celeEmisji?: string;
+    terminSubskrypcji?: string;
+    miejsceZapisow?: string;
+    minimalnaLiczbaAkcji?: number | null;
+    firmaInwestycyjna?: string;
+    dataWaznosci?: string;
+}
 
 // Firebase config
 const firebaseConfig = {
@@ -194,7 +208,8 @@ FORMATOWANIE - ŚCISŁE ZASADY:
 export async function* streamMemorandumSection(
     sectionId: string,
     company: KRSCompany,
-    financials: FinancialData[]
+    financials: FinancialData[],
+    offerParams?: OfferParameters | null
 ): AsyncGenerator<string> {
     const section = MEMORANDUM_SECTIONS.find(s => s.id === sectionId);
     if (!section) {
@@ -220,7 +235,7 @@ export async function* streamMemorandumSection(
         const vertexAI = getVertexAI(app);
         const model = getGenerativeModel(vertexAI, { model: 'gemini-2.0-flash' });
 
-        const prompt = generateSectionPrompt(sectionId, section, company, financials);
+        const prompt = generateSectionPrompt(sectionId, section, company, financials, offerParams);
 
         console.log(`🤖 Generating section ${sectionId} with AI...`);
 
@@ -263,8 +278,23 @@ function generateSectionPrompt(
     sectionId: string,
     section: SectionConfig,
     company: KRSCompany,
-    financials: FinancialData[]
+    financials: FinancialData[],
+    offerParams?: OfferParameters | null
 ): string {
+    // Dane z parametrów oferty (jeśli podane przez użytkownika)
+    const offerData = offerParams ? `
+PARAMETRY OFERTY (podane przez użytkownika - użyj tych konkretnych wartości!):
+- Seria akcji: ${offerParams.seriaAkcji || '[DO UZUPEŁNIENIA]'}
+- Liczba akcji w ofercie: ${offerParams.liczbaAkcji?.toLocaleString('pl-PL') || '[DO UZUPEŁNIENIA]'}
+- Wartość nominalna jednej akcji: ${offerParams.wartoscNominalna ? offerParams.wartoscNominalna.toFixed(2) + ' PLN' : '[DO UZUPEŁNIENIA]'}
+- Cena emisyjna jednej akcji: ${offerParams.cenaEmisyjna ? offerParams.cenaEmisyjna.toFixed(2) + ' PLN' : '[DO UZUPEŁNIENIA]'}
+- Cele emisji: ${offerParams.celeEmisji || '[DO UZUPEŁNIENIA]'}
+- Termin subskrypcji: ${offerParams.terminSubskrypcji || '[DO UZUPEŁNIENIA]'}
+- Miejsce składania zapisów: ${offerParams.miejsceZapisow || '[DO UZUPEŁNIENIA]'}
+- Minimalna liczba akcji w zapisie: ${offerParams.minimalnaLiczbaAkcji || '[DO UZUPEŁNIENIA]'}
+- Firma inwestycyjna: ${offerParams.firmaInwestycyjna || 'Oferta bez pośrednictwa firmy inwestycyjnej'}
+- Data ważności memorandum: ${offerParams.dataWaznosci || '12 miesięcy od daty sporządzenia'}
+` : '';
     const companyData = `
 DANE SPÓŁKI (z odpisu KRS):
 - Pełna nazwa: ${company.nazwa}
@@ -297,6 +327,7 @@ Rok ${f.rok}:
         intro: `Napisz rozdział I. WSTĘP memorandum informacyjnego zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
+${offerData}
 
 WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
 ${subsectionsText}
@@ -306,13 +337,13 @@ ${FORMATTING_RULES}
 SZCZEGÓŁOWE WYMAGANIA:
 - §1: Podaj pełne dane emitenta (nazwa, KRS, NIP, REGON, adres, kapitał)
 - §2: Jeśli sprzedającym jest emitent, napisz "Sprzedającym jest Emitent"
-- §3: Opisz rodzaj akcji (zwykłe/uprzywilejowane, na okaziciela/imienne), liczbę [DO UZUPEŁNIENIA], wartość nominalną [DO UZUPEŁNIENIA]
+- §3: Opisz rodzaj akcji (zwykłe na okaziciela), użyj KONKRETNYCH danych z PARAMETRÓW OFERTY jeśli podane
 - §4: "Emisja nie jest objęta gwarancją" lub szczegóły gwaranta
-- §5: Cena emisyjna [DO UZUPEŁNIENIA] PLN lub sposób ustalenia (np. book-building)
+- §5: Cena emisyjna - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
 - §6: Cytuj: "Oferowanie papierów wartościowych odbywa się wyłącznie na warunkach i zgodnie z zasadami określonymi w niniejszym memorandum informacyjnym."
 - §7: Powołaj się na art. 37a ustawy z dnia 29 lipca 2005 r. o ofercie publicznej
-- §8: Firma inwestycyjna [DO UZUPEŁNIENIA] lub "Oferta bez pośrednictwa firmy inwestycyjnej"
-- §9: Data ważności: 12 miesięcy od daty sporządzenia
+- §8: Firma inwestycyjna - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
+- §9: Data ważności - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
 - §10: Informacje o zmianach publikowane na stronie [DO UZUPEŁNIENIA]`,
 
         risks: `Napisz rozdział II. CZYNNIKI RYZYKA zgodnie z Dz.U. 2020.1053.
@@ -350,15 +381,16 @@ Każde ryzyko opisz w 3-5 zdaniach, wyjaśniając jego naturę i potencjalny wp�
         offer: `Napisz rozdział IV. DANE O OFERCIE AKCJI zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
+${offerData}
 
 WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
 ${subsectionsText}
 
 ${FORMATTING_RULES}
 
-SZCZEGÓŁOWE WYMAGANIA:
-- §16: Rodzaj (akcje zwykłe na okaziciela serii [_]), liczba [DO UZUPEŁNIENIA], wartość nominalna [DO UZUPEŁNIENIA] PLN
-- §17: Cele emisji - rozwój działalności, inwestycje, kapitał obrotowy (rozpisz szczegółowo)
+SZCZEGÓŁOWE WYMAGANIA (użyj KONKRETNYCH danych z PARAMETRÓW OFERTY jeśli podane!):
+- §16: Rodzaj (akcje zwykłe na okaziciela serii [SERIA]), liczba [LICZBA AKCJI], wartość nominalna [WARTOŚĆ NOMINALNA] PLN - użyj danych z PARAMETRÓW OFERTY
+- §17: Cele emisji - użyj KONKRETNYCH celów z PARAMETRÓW OFERTY jeśli podane
 - §18: Szacunkowe koszty: przygotowanie dokumentacji, doradztwo, opłaty giełdowe
 - §19: Uchwała WZA nr [_] z dnia [_]
 - §20: Czy akcjonariusze mają prawo pierwszeństwa
@@ -367,7 +399,7 @@ SZCZEGÓŁOWE WYMAGANIA:
 - §23: Polityka dywidendowa - czy spółka zamierza wypłacać dywidendę
 - §24: Podatek od dywidendy 19%, podatek od zysków kapitałowych 19%
 - §25: Umowy gwarancyjne [DO UZUPEŁNIENIA] lub brak
-- §26: Terminy oferty, miejsce zapisów, minimalna liczba akcji`,
+- §26: Terminy oferty [TERMIN SUBSKRYPCJI], miejsce zapisów [MIEJSCE ZAPISÓW], min. liczba akcji [MINIMALNA LICZBA] - użyj danych z PARAMETRÓW OFERTY`,
 
         issuer: `Napisz rozdział V. DANE O EMITENCIE zgodnie z Dz.U. 2020.1053.
 

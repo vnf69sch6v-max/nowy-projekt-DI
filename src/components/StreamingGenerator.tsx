@@ -2,12 +2,14 @@
 
 import { useState, useCallback } from 'react';
 import DocumentUploader from './DocumentUploader';
+import OfferParametersForm, { OfferParameters } from './OfferParametersForm';
 import { Sparkles, Download, Loader2, CheckCircle, AlertCircle, FileText } from 'lucide-react';
 import { KRSCompany, FinancialData } from '@/types';
 
 export default function MemorandumGenerator() {
     const [krsFile, setKrsFile] = useState<File | null>(null);
     const [financialFile, setFinancialFile] = useState<File | null>(null);
+    const [offerParams, setOfferParams] = useState<OfferParameters | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedContent, setGeneratedContent] = useState('');
     const [companyData, setCompanyData] = useState<KRSCompany | null>(null);
@@ -28,6 +30,9 @@ export default function MemorandumGenerator() {
         formData.append('krs', krsFile);
         if (financialFile) {
             formData.append('financial', financialFile);
+        }
+        if (offerParams) {
+            formData.append('offerParams', JSON.stringify(offerParams));
         }
 
         try {
@@ -74,7 +79,7 @@ export default function MemorandumGenerator() {
         } finally {
             setIsGenerating(false);
         }
-    }, [krsFile, financialFile]);
+    }, [krsFile, financialFile, offerParams]);
 
     const handleDownloadPdf = useCallback(async () => {
         if (!companyData || !generatedContent) return;
@@ -88,6 +93,7 @@ export default function MemorandumGenerator() {
                     content: generatedContent,
                     company: companyData,
                     financials: financialsData,
+                    offerParams: offerParams,
                 }),
             });
 
@@ -105,7 +111,7 @@ export default function MemorandumGenerator() {
         } finally {
             setIsDownloading(false);
         }
-    }, [generatedContent, companyData, financialsData]);
+    }, [generatedContent, companyData, financialsData, offerParams]);
 
     return (
         <div className="max-w-xl mx-auto">
@@ -132,6 +138,8 @@ export default function MemorandumGenerator() {
                         maxFiles={1}
                         onFilesChange={(files) => setFinancialFile(files[0] || null)}
                     />
+
+                    <OfferParametersForm onChange={setOfferParams} />
 
                     <button
                         onClick={handleGenerate}

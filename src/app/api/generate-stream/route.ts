@@ -22,6 +22,8 @@ export async function POST(request: NextRequest) {
                 const formData = await request.formData();
                 const krsFile = formData.get('krs') as File | null;
                 const financialFile = formData.get('financial') as File | null;
+                const offerParamsStr = formData.get('offerParams') as string | null;
+                const offerParams = offerParamsStr ? JSON.parse(offerParamsStr) : null;
 
                 if (!krsFile) {
                     send({ type: 'error', message: 'Wymagany jest odpis z KRS (PDF)' });
@@ -124,7 +126,7 @@ export async function POST(request: NextRequest) {
 
                     // Streamuj sekcję
                     try {
-                        for await (const chunk of streamMemorandumSection(section.id, companyData, financials)) {
+                        for await (const chunk of streamMemorandumSection(section.id, companyData, financials, offerParams)) {
                             send({ type: 'content', text: chunk });
                         }
                     } catch (error) {
