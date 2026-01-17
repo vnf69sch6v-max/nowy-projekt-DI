@@ -9,8 +9,8 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-// Poprawna nazwa modelu - Haiku jest najtańszy
-const MODEL = 'claude-3-haiku-20240307';
+// Claude 3.5 Sonnet - obsługuje PDF (Haiku nie obsługuje)
+const MODEL = 'claude-3-5-sonnet-20241022';
 
 /**
  * Krótki prompt KRS dla minimalnego zużycia
