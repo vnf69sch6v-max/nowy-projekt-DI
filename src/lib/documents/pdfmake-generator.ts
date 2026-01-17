@@ -560,18 +560,54 @@ export async function generateProfessionalPDF(
             currentPage.drawText(years[i], { x: xPos + 30, y, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
             xPos += colWidths[i + 1] || 100;
         }
+        // Nagłówek kolumny trendu
+        if (financials.length >= 2) {
+            currentPage.drawText('Zmiana YoY', { x: xPos + 5, y, size: 9, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
+        }
         y -= 22;
 
-        const rows = [
-            ['Przychody netto', ...financials.map(f => formatPLN(f.przychodyNetto))],
-            ['Zysk netto', ...financials.map(f => formatPLN(f.zyskNetto))],
-            ['Suma bilansowa', ...financials.map(f => formatPLN(f.sumaBilansowa))],
-            ['Kapital wlasny', ...financials.map(f => formatPLN(f.kapitalWlasny))],
-            ['Zobowiazania', ...financials.map(f => formatPLN(f.zobowiazania))],
+        // Helper do obliczania trendu
+        const calcTrend = (curr: number | null | undefined, prev: number | null | undefined): { text: string; isPositive: boolean } => {
+            if (!curr || !prev || prev === 0) return { text: '-', isPositive: true };
+            const change = ((curr - prev) / Math.abs(prev)) * 100;
+            const arrow = change >= 0 ? '+' : '';
+            return {
+                text: `${arrow}${change.toFixed(1)}%`,
+                isPositive: change >= 0
+            };
+        };
+
+        // Dane finansowe z trendami
+        const rowsData: { label: string; values: string[]; trend?: { text: string; isPositive: boolean } }[] = [
+            {
+                label: 'Przychody netto',
+                values: financials.map(f => formatPLN(f.przychodyNetto)),
+                trend: financials.length >= 2 ? calcTrend(financials[0].przychodyNetto, financials[1].przychodyNetto) : undefined
+            },
+            {
+                label: 'Zysk netto',
+                values: financials.map(f => formatPLN(f.zyskNetto)),
+                trend: financials.length >= 2 ? calcTrend(financials[0].zyskNetto, financials[1].zyskNetto) : undefined
+            },
+            {
+                label: 'Suma bilansowa',
+                values: financials.map(f => formatPLN(f.sumaBilansowa)),
+                trend: financials.length >= 2 ? calcTrend(financials[0].sumaBilansowa, financials[1].sumaBilansowa) : undefined
+            },
+            {
+                label: 'Kapital wlasny',
+                values: financials.map(f => formatPLN(f.kapitalWlasny)),
+                trend: financials.length >= 2 ? calcTrend(financials[0].kapitalWlasny, financials[1].kapitalWlasny) : undefined
+            },
+            {
+                label: 'Zobowiazania',
+                values: financials.map(f => formatPLN(f.zobowiazania)),
+                trend: financials.length >= 2 ? calcTrend(financials[0].zobowiazania, financials[1].zobowiazania) : undefined
+            },
         ];
 
-        for (let r = 0; r < rows.length; r++) {
-            const row = rows[r];
+        for (let r = 0; r < rowsData.length; r++) {
+            const rowData = rowsData[r];
             xPos = MARGIN + 5;
 
             if (r % 2 === 1) {
@@ -584,16 +620,30 @@ export async function generateProfessionalPDF(
                 });
             }
 
-            currentPage.drawText(row[0], { x: xPos, y, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
+            // Nazwa pozycji
+            currentPage.drawText(rowData.label, { x: xPos, y, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
             xPos += colWidths[0];
-            for (let i = 1; i < row.length; i++) {
-                // Wyrównanie liczb do prawej strony kolumny
-                const colWidth = colWidths[i] || 100;
-                const textWidth = font.widthOfTextAtSize(row[i], 9);
+
+            // Wartości dla każdego roku
+            for (let i = 0; i < rowData.values.length; i++) {
+                const colWidth = colWidths[i + 1] || 100;
+                const textWidth = font.widthOfTextAtSize(rowData.values[i], 9);
                 const rightAlignedX = xPos + colWidth - textWidth - 10;
-                currentPage.drawText(row[i], { x: rightAlignedX, y, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
+                currentPage.drawText(rowData.values[i], { x: rightAlignedX, y, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
                 xPos += colWidth;
             }
+
+            // Kolumna trendu z kolorami
+            if (rowData.trend) {
+                const trendColor = rowData.trend.isPositive
+                    ? rgb(0.1, 0.6, 0.2)  // zielony dla wzrostu
+                    : rgb(0.8, 0.2, 0.1); // czerwony dla spadku
+                const arrow = rowData.trend.isPositive ? '↑' : '↓';
+                currentPage.drawText(`${arrow} ${rowData.trend.text}`, {
+                    x: xPos + 5, y, size: 9, font: fontBold, color: trendColor
+                });
+            }
+
             y -= 18;
         }
 
@@ -976,6 +1026,123 @@ function drawLine(page: PDFPage, x: number, y: number, width: number, thickness:
         thickness,
         color,
     });
+}
+
+/**
+ * Nagłówek strony z nazwą sekcji
+ */
+function addPageHeader(
+    page: PDFPage,
+    font: PDFFont,
+    fontBold: PDFFont,
+    companyName?: string,
+    sectionName?: string
+) {
+    // Lewa strona: "MEMORANDUM INFORMACYJNE"
+    page.drawText('MEMORANDUM INFORMACYJNE', {
+        x: MARGIN,
+        y: PAGE_HEIGHT - 25,
+        size: 8,
+        font: fontBold,
+        color: rgb(0.4, 0.4, 0.4)
+    });
+
+    // Prawa strona: nazwa sekcji
+    if (sectionName) {
+        const sectionWidth = font.widthOfTextAtSize(sectionName, 8);
+        page.drawText(sectionName, {
+            x: PAGE_WIDTH - MARGIN - sectionWidth,
+            y: PAGE_HEIGHT - 25,
+            size: 8,
+            font,
+            color: rgb(0.4, 0.4, 0.5)
+        });
+    }
+
+    // Linia pod nagłówkiem
+    page.drawLine({
+        start: { x: MARGIN, y: PAGE_HEIGHT - 35 },
+        end: { x: PAGE_WIDTH - MARGIN, y: PAGE_HEIGHT - 35 },
+        thickness: 0.3,
+        color: rgb(0.8, 0.8, 0.8),
+    });
+}
+
+/**
+ * Callout box dla ostrzeżeń i [DO UZUPEŁNIENIA]
+ */
+function drawCalloutBox(
+    page: PDFPage,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    font: PDFFont,
+    type: 'warning' | 'info' | 'placeholder'
+): number {
+    const padding = 8;
+    const lineHeight = 12;
+
+    // Kolory w zależności od typu
+    const colors = {
+        warning: { bg: rgb(1, 0.95, 0.9), border: rgb(0.9, 0.5, 0.3), icon: '[!]' },
+        info: { bg: rgb(0.93, 0.95, 1), border: rgb(0.4, 0.5, 0.8), icon: '[i]' },
+        placeholder: { bg: rgb(1, 0.93, 0.93), border: rgb(0.8, 0.4, 0.4), icon: '[?]' },
+    };
+
+    const style = colors[type];
+
+    // Oblicz wysokość na podstawie tekstu
+    const words = text.split(' ');
+    let lines = 1;
+    let currentLine = '';
+    for (const word of words) {
+        const testLine = currentLine ? `${currentLine} ${word}` : word;
+        if (font.widthOfTextAtSize(testLine, 9) > width - padding * 3) {
+            lines++;
+            currentLine = word;
+        } else {
+            currentLine = testLine;
+        }
+    }
+
+    const boxHeight = lines * lineHeight + padding * 2;
+
+    // Tło
+    page.drawRectangle({
+        x,
+        y: y - boxHeight,
+        width,
+        height: boxHeight,
+        color: style.bg,
+        borderColor: style.border,
+        borderWidth: 1,
+    });
+
+    // Ikona
+    page.drawText(style.icon, {
+        x: x + padding,
+        y: y - padding - 9,
+        size: 10,
+        font,
+        color: style.border
+    });
+
+    // Tekst (uproszczony - pierwsza linia)
+    const maxTextWidth = width - padding * 4 - 20;
+    let displayText = text;
+    if (font.widthOfTextAtSize(text, 9) > maxTextWidth) {
+        displayText = text.substring(0, 80) + '...';
+    }
+    page.drawText(displayText, {
+        x: x + padding + 25,
+        y: y - padding - 9,
+        size: 9,
+        font,
+        color: rgb(0.3, 0.3, 0.3)
+    });
+
+    return boxHeight;
 }
 
 function addPageFooter(
