@@ -1,18 +1,20 @@
 /**
- * API do generowania PDF z pdfmake
+ * API do generowania PDF
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { generateProfessionalPDF } from '@/lib/documents/pdfmake-generator';
 import { KRSCompany, FinancialData } from '@/types';
+import { OfferParameters } from '@/lib/ai/streaming-generator';
 
 export async function POST(request: NextRequest) {
     try {
         const body = await request.json();
-        const { content, company, financials } = body as {
+        const { content, company, financials, offerParams } = body as {
             content: string;
             company: KRSCompany;
             financials: FinancialData[];
+            offerParams?: OfferParameters;
         };
 
         if (!content || !company) {
@@ -22,7 +24,7 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        const pdfBytes = await generateProfessionalPDF(content, company, financials || []);
+        const pdfBytes = await generateProfessionalPDF(content, company, financials || [], offerParams);
 
         return new NextResponse(Buffer.from(pdfBytes), {
             headers: {

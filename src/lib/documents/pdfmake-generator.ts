@@ -4,10 +4,12 @@
  * - Style nagłówków
  * - Numeracja stron
  * - Blok podpisów
+ * - Parametry oferty
  */
 
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import { KRSCompany, FinancialData } from '@/types';
+import { OfferParameters } from '@/lib/ai/streaming-generator';
 
 // Stałe
 const PAGE_WIDTH = 595;
@@ -28,7 +30,6 @@ function sanitize(text: string): string {
         '┌': '+', '┐': '+', '└': '+', '┘': '+',
     };
 
-    // Usuń markdown
     let result = text
         .replace(/#{1,6}\s*/g, '')
         .replace(/\*\*([^*]+)\*\*/g, '$1')
@@ -36,7 +37,6 @@ function sanitize(text: string): string {
         .replace(/```[^`]*```/g, '')
         .replace(/`([^`]+)`/g, '$1');
 
-    // Zamień polskie
     return result.split('').map(c => polishMap[c] || c).join('')
         .split('').filter(c => c.charCodeAt(0) < 128 || c === ' ').join('');
 }
@@ -44,9 +44,17 @@ function sanitize(text: string): string {
 /**
  * Formatuje PLN
  */
-function formatPLN(value: number): string {
+function formatPLN(value: number | null | undefined): string {
     if (!value) return '-';
     return value.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' PLN';
+}
+
+/**
+ * Formatuje liczbę
+ */
+function formatNumber(value: number | null | undefined): string {
+    if (!value) return '-';
+    return value.toLocaleString('pl-PL');
 }
 
 /**
@@ -55,7 +63,8 @@ function formatPLN(value: number): string {
 export async function generateProfessionalPDF(
     content: string,
     company: KRSCompany,
-    financials: FinancialData[]
+    financials: FinancialData[],
+    offerParams?: OfferParameters | null
 ): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -73,23 +82,23 @@ export async function generateProfessionalPDF(
     // STRONA TYTUŁOWA
     // ========================================
 
-    y -= 100;
+    y -= 80;
     drawCenteredText(currentPage, 'MEMORANDUM INFORMACYJNE', y, fontBold, 24, rgb(0.1, 0.1, 0.15));
 
-    y -= 50;
-    drawCenteredText(currentPage, companyName, y, fontBold, 18, rgb(0.1, 0.1, 0.2));
-
     y -= 40;
-    drawCenteredText(currentPage, `Sporzadzone dnia: ${today}`, y, font, 12, rgb(0.4, 0.4, 0.4));
+    drawCenteredText(currentPage, companyName, y, fontBold, 16, rgb(0.1, 0.1, 0.2));
 
     y -= 30;
+    drawCenteredText(currentPage, `Sporzadzone dnia: ${today}`, y, font, 11, rgb(0.4, 0.4, 0.4));
+
+    y -= 20;
     drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
 
     // Tabela danych emitenta
-    y -= 40;
-    currentPage.drawText('DANE EMITENTA', { x: MARGIN, y, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.15) });
+    y -= 30;
+    currentPage.drawText('DANE EMITENTA', { x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.15) });
 
-    y -= 25;
+    y -= 20;
     const companyInfo = [
         ['Nazwa:', companyName],
         ['KRS:', company.krs || '-'],
@@ -97,16 +106,99 @@ export async function generateProfessionalPDF(
         ['REGON:', company.regon || '-'],
         ['Forma prawna:', sanitize(company.formaOrganizacyjna || '-')],
         ['Siedziba:', sanitize(company.siedzibaAdres || '-')],
-        ['Kapital:', formatPLN(company.kapitalZakladowy || 0)],
+        ['Kapital:', formatPLN(company.kapitalZakladowy)],
     ];
 
     for (const [label, value] of companyInfo) {
-        currentPage.drawText(label, { x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
-        currentPage.drawText(value, { x: MARGIN + 100, y, size: 10, font, color: rgb(0.1, 0.1, 0.1) });
-        y -= 16;
+        currentPage.drawText(label, { x: MARGIN, y, size: 9, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+        currentPage.drawText(value.substring(0, 60), { x: MARGIN + 90, y, size: 9, font, color: rgb(0.1, 0.1, 0.1) });
+        y -= 14;
+    }
+
+    // ========================================
+    // PARAMETRY OFERTY (jeśli podane)
+    // ========================================
+
+    if (offerParams && hasOfferData(offerParams)) {
+        y -= 20;
+        drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.8, 0.8, 0.8));
+
+        y -= 25;
+        currentPage.drawText('PARAMETRY OFERTY', { x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.1, 0.1, 0.15) });
+
+        y -= 20;
+
+        // Tło dla tabeli parametrów
+        const tableHeight = countOfferRows(offerParams) * 14 + 10;
+        currentPage.drawRectangle({
+            x: MARGIN,
+            y: y - tableHeight + 10,
+            width: CONTENT_WIDTH,
+            height: tableHeight,
+            color: rgb(0.97, 0.97, 0.99),
+            borderColor: rgb(0.85, 0.85, 0.9),
+            borderWidth: 0.5,
+        });
+
+        y -= 5;
+
+        const offerInfo: [string, string][] = [];
+
+        if (offerParams.seriaAkcji) {
+            offerInfo.push(['Seria akcji:', offerParams.seriaAkcji]);
+        }
+        if (offerParams.liczbaAkcji) {
+            offerInfo.push(['Liczba akcji:', formatNumber(offerParams.liczbaAkcji)]);
+        }
+        if (offerParams.wartoscNominalna) {
+            offerInfo.push(['Wartosc nominalna:', formatPLN(offerParams.wartoscNominalna)]);
+        }
+        if (offerParams.cenaEmisyjna) {
+            offerInfo.push(['Cena emisyjna:', formatPLN(offerParams.cenaEmisyjna)]);
+        }
+        if (offerParams.celeEmisji) {
+            offerInfo.push(['Cele emisji:', sanitize(offerParams.celeEmisji).substring(0, 50) + (offerParams.celeEmisji.length > 50 ? '...' : '')]);
+        }
+        if (offerParams.terminSubskrypcji) {
+            offerInfo.push(['Termin subskrypcji:', offerParams.terminSubskrypcji]);
+        }
+        if (offerParams.miejsceZapisow) {
+            offerInfo.push(['Miejsce zapisow:', sanitize(offerParams.miejsceZapisow).substring(0, 40)]);
+        }
+        if (offerParams.minimalnaLiczbaAkcji) {
+            offerInfo.push(['Min. liczba akcji:', formatNumber(offerParams.minimalnaLiczbaAkcji)]);
+        }
+        if (offerParams.firmaInwestycyjna) {
+            offerInfo.push(['Firma inwestycyjna:', sanitize(offerParams.firmaInwestycyjna).substring(0, 40)]);
+        }
+        if (offerParams.dataWaznosci) {
+            offerInfo.push(['Data waznosci:', offerParams.dataWaznosci]);
+        }
+
+        // Wartość emisji (jeśli można obliczyć)
+        if (offerParams.liczbaAkcji && offerParams.cenaEmisyjna) {
+            const wartoscEmisji = offerParams.liczbaAkcji * offerParams.cenaEmisyjna;
+            offerInfo.push(['WARTOSC EMISJI:', formatPLN(wartoscEmisji)]);
+        }
+
+        for (const [label, value] of offerInfo) {
+            const isTotal = label.startsWith('WARTOSC');
+            currentPage.drawText(label, {
+                x: MARGIN + 5, y, size: 9,
+                font: isTotal ? fontBold : font,
+                color: isTotal ? rgb(0.1, 0.3, 0.1) : rgb(0.3, 0.3, 0.3)
+            });
+            currentPage.drawText(value, {
+                x: MARGIN + 120, y, size: 9,
+                font: isTotal ? fontBold : font,
+                color: isTotal ? rgb(0.1, 0.3, 0.1) : rgb(0.1, 0.1, 0.1)
+            });
+            y -= 14;
+        }
     }
 
     // Nowa strona
+    addPageFooter(currentPage, pageNum, font);
     currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
     y = PAGE_HEIGHT - MARGIN;
     pageNum++;
@@ -149,7 +241,6 @@ export async function generateProfessionalPDF(
             continue;
         }
 
-        // Sprawdź czy potrzebna nowa strona
         if (y < MARGIN + 80) {
             addPageFooter(currentPage, pageNum, font);
             currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
@@ -157,7 +248,6 @@ export async function generateProfessionalPDF(
             pageNum++;
         }
 
-        // Nagłówek sekcji (I., II., itd.)
         if (/^[IVX]+\.\s/.test(trimmed)) {
             y -= 15;
             drawLine(currentPage, MARGIN, y + 5, CONTENT_WIDTH, 0.5, rgb(0.8, 0.8, 0.8));
@@ -167,7 +257,6 @@ export async function generateProfessionalPDF(
             continue;
         }
 
-        // Podsekcja (1., 2., itd.)
         if (/^\d+\.\s/.test(trimmed)) {
             y -= 5;
             currentPage.drawText(trimmed, { x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
@@ -175,7 +264,6 @@ export async function generateProfessionalPDF(
             continue;
         }
 
-        // Linie separacji
         if (/^[-=]+$/.test(trimmed)) {
             y -= 5;
             drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.3, rgb(0.8, 0.8, 0.8));
@@ -183,7 +271,6 @@ export async function generateProfessionalPDF(
             continue;
         }
 
-        // Zwykły tekst - word wrap
         const wrappedLines = wrapText(trimmed, font, 10, CONTENT_WIDTH);
         for (const wLine of wrappedLines) {
             if (y < MARGIN + 50) {
@@ -213,11 +300,9 @@ export async function generateProfessionalPDF(
         currentPage.drawText('WYBRANE DANE FINANSOWE (PLN)', { x: MARGIN, y, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.2) });
         y -= 25;
 
-        // Nagłówek tabeli
         const colWidths = [150, ...financials.map(() => 100)];
         const years = financials.map(f => f.rok.toString());
 
-        // Tło nagłówka
         currentPage.drawRectangle({
             x: MARGIN,
             y: y - 5,
@@ -235,7 +320,6 @@ export async function generateProfessionalPDF(
         }
         y -= 22;
 
-        // Dane
         const rows = [
             ['Przychody netto', ...financials.map(f => formatPLN(f.przychodyNetto))],
             ['Zysk netto', ...financials.map(f => formatPLN(f.zyskNetto))],
@@ -248,7 +332,6 @@ export async function generateProfessionalPDF(
             const row = rows[r];
             xPos = MARGIN + 5;
 
-            // Alternujące tło
             if (r % 2 === 1) {
                 currentPage.drawRectangle({
                     x: MARGIN,
@@ -268,7 +351,6 @@ export async function generateProfessionalPDF(
             y -= 18;
         }
 
-        // Linia pod tabelą
         y -= 5;
         drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
     }
@@ -308,6 +390,37 @@ export async function generateProfessionalPDF(
 // ========================================
 // FUNKCJE POMOCNICZE
 // ========================================
+
+function hasOfferData(params: OfferParameters): boolean {
+    return !!(
+        params.seriaAkcji ||
+        params.liczbaAkcji ||
+        params.wartoscNominalna ||
+        params.cenaEmisyjna ||
+        params.celeEmisji ||
+        params.terminSubskrypcji ||
+        params.miejsceZapisow ||
+        params.minimalnaLiczbaAkcji ||
+        params.firmaInwestycyjna ||
+        params.dataWaznosci
+    );
+}
+
+function countOfferRows(params: OfferParameters): number {
+    let count = 0;
+    if (params.seriaAkcji) count++;
+    if (params.liczbaAkcji) count++;
+    if (params.wartoscNominalna) count++;
+    if (params.cenaEmisyjna) count++;
+    if (params.celeEmisji) count++;
+    if (params.terminSubskrypcji) count++;
+    if (params.miejsceZapisow) count++;
+    if (params.minimalnaLiczbaAkcji) count++;
+    if (params.firmaInwestycyjna) count++;
+    if (params.dataWaznosci) count++;
+    if (params.liczbaAkcji && params.cenaEmisyjna) count++; // wartość emisji
+    return count;
+}
 
 function drawCenteredText(page: PDFPage, text: string, y: number, font: PDFFont, size: number, color: ReturnType<typeof rgb>) {
     const width = font.widthOfTextAtSize(text, size);
