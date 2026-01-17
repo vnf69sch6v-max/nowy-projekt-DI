@@ -9,8 +9,8 @@ const anthropic = new Anthropic({
     apiKey: process.env.ANTHROPIC_API_KEY || '',
 });
 
-// Claude 3.5 Sonnet - obsługuje PDF (Haiku nie obsługuje)
-const MODEL = 'claude-3-5-sonnet-20241022';
+// Claude Sonnet 4 - obsługuje PDF
+const MODEL = 'claude-sonnet-4-20250514';
 
 /**
  * Krótki prompt KRS dla minimalnego zużycia
