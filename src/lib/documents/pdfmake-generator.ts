@@ -10,6 +10,7 @@
 import { PDFDocument, StandardFonts, rgb, PDFPage, PDFFont } from 'pdf-lib';
 import { KRSCompany, FinancialData } from '@/types';
 import { OfferParameters } from '@/lib/ai/streaming-generator';
+import { calculateAllRatios, formatPercent, generateFinancialComment } from '@/lib/utils/financial-ratios';
 
 // Stałe
 const PAGE_WIDTH = 595;
@@ -504,6 +505,114 @@ export async function generateProfessionalPDF(
 
                 y -= 20;
             }
+        }
+
+        // ========================================
+        // ANALIZA WSKAźNIKÓW FINANSOWYCH
+        // ========================================
+
+        const allRatios = calculateAllRatios(financials);
+
+        if (allRatios.length > 0) {
+            y -= 30;
+
+            if (y < MARGIN + 200) {
+                addPageFooter(currentPage, pageNum, font);
+                currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                y = PAGE_HEIGHT - MARGIN;
+                pageNum++;
+            }
+
+            // Tło sekcji
+            currentPage.drawRectangle({
+                x: MARGIN - 5,
+                y: y - 5,
+                width: CONTENT_WIDTH + 10,
+                height: 24,
+                color: rgb(0.93, 0.95, 0.98),
+            });
+
+            currentPage.drawText('ANALIZA WSKAZNIKOWA', {
+                x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.15, 0.15, 0.25)
+            });
+            y -= 30;
+
+            // Tabela wskaźników
+            const ratioLabels = ['Rok', 'ROE', 'ROA', 'ROS', 'Zadluzenie', 'Przychody YoY', 'Zysk YoY'];
+            const colW = CONTENT_WIDTH / ratioLabels.length;
+
+            // Nagłówek tabeli
+            let xPos = MARGIN;
+            for (const label of ratioLabels) {
+                currentPage.drawText(label, { x: xPos, y, size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+                xPos += colW;
+            }
+            y -= 15;
+            drawLine(currentPage, MARGIN, y + 5, CONTENT_WIDTH, 0.5, rgb(0.8, 0.8, 0.8));
+
+            // Dane wskaźników
+            for (const r of allRatios) {
+                if (y < MARGIN + 50) {
+                    addPageFooter(currentPage, pageNum, font);
+                    currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    y = PAGE_HEIGHT - MARGIN;
+                    pageNum++;
+                }
+
+                xPos = MARGIN;
+                currentPage.drawText(r.rok.toString(), { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                xPos += colW;
+                currentPage.drawText(r.roe !== undefined ? `${r.roe.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                xPos += colW;
+                currentPage.drawText(r.roa !== undefined ? `${r.roa.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                xPos += colW;
+                currentPage.drawText(r.ros !== undefined ? `${r.ros.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                xPos += colW;
+                currentPage.drawText(r.debtRatio !== undefined ? `${r.debtRatio.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                xPos += colW;
+
+                // Dynamika z kolorami
+                const revColor = r.revenueGrowth !== undefined && r.revenueGrowth >= 0 ? rgb(0.2, 0.6, 0.3) : rgb(0.7, 0.2, 0.2);
+                currentPage.drawText(formatPercent(r.revenueGrowth), { x: xPos, y, size: 8, font, color: revColor });
+                xPos += colW;
+
+                const profColor = r.profitGrowth !== undefined && r.profitGrowth >= 0 ? rgb(0.2, 0.6, 0.3) : rgb(0.7, 0.2, 0.2);
+                currentPage.drawText(formatPercent(r.profitGrowth), { x: xPos, y, size: 8, font, color: profColor });
+
+                y -= 14;
+            }
+
+            y -= 10;
+            drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.3, rgb(0.8, 0.8, 0.8));
+            y -= 15;
+
+            // Komentarz AI do ostatniego roku
+            const lastRatio = allRatios[allRatios.length - 1];
+            const comment = generateFinancialComment(lastRatio);
+
+            if (comment) {
+                const commentLines = wrapText(comment, font, 9, CONTENT_WIDTH - 10);
+                for (const line of commentLines) {
+                    if (y < MARGIN + 50) {
+                        addPageFooter(currentPage, pageNum, font);
+                        currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                        y = PAGE_HEIGHT - MARGIN;
+                        pageNum++;
+                    }
+                    currentPage.drawText(line, { x: MARGIN + 5, y, size: 9, font, color: rgb(0.3, 0.3, 0.4) });
+                    y -= 13;
+                }
+            }
+
+            // Trend
+            y -= 10;
+            const trendColor = lastRatio.trend === 'positive' ? rgb(0.2, 0.6, 0.3) :
+                lastRatio.trend === 'negative' ? rgb(0.7, 0.2, 0.2) : rgb(0.5, 0.5, 0.5);
+            const trendIcon = lastRatio.trend === 'positive' ? '↑' : lastRatio.trend === 'negative' ? '↓' : '→';
+            currentPage.drawText(`${trendIcon} ${lastRatio.trendDescription}`, {
+                x: MARGIN, y, size: 9, font: fontBold, color: trendColor
+            });
+            y -= 20;
         }
     }
 
