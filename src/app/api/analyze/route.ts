@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { analyzeKRSDocument, analyzeFinancialDocument } from '@/lib/ai/document-analyzer';
-import { generateMemorandumSections, sectionsToMemorandumContext } from '@/lib/ai/pipeline';
-import { generateMemorandum } from '@/lib/documents/generator';
+import { generateFullMemorandum } from '@/lib/ai/memorandum-generator';
+import { generateProfessionalMemorandum } from '@/lib/documents/word-generator';
 import { generateMockFinancials } from '@/lib/financials/mock';
 
 export async function POST(request: NextRequest) {
@@ -18,44 +18,47 @@ export async function POST(request: NextRequest) {
             );
         }
 
-        console.log('📄 Received files:');
+        console.log('📄 Processing documents...');
         console.log(`  - KRS: ${krsFile.name} (${(krsFile.size / 1024).toFixed(1)} KB)`);
-        if (financialFile) {
-            console.log(`  - Financial: ${financialFile.name} (${(financialFile.size / 1024).toFixed(1)} KB)`);
-        }
 
-        // Analizuj odpis KRS
-        console.log('🔍 Analyzing KRS document...');
+        // 1. Analizuj KRS przez Claude
+        console.log('🔍 Step 1: Analyzing KRS with Claude...');
         const krsBuffer = Buffer.from(await krsFile.arrayBuffer());
         const companyData = await analyzeKRSDocument(krsBuffer);
-        console.log('✅ KRS data extracted:', companyData.nazwa);
+        console.log('✅ KRS extracted:', companyData.nazwa);
 
-        // Analizuj sprawozdanie finansowe
+        // 2. Analizuj finanse (jeśli dostępne)
         let financials;
         if (financialFile) {
-            console.log('📊 Analyzing financial document...');
+            console.log(`  - Financial: ${financialFile.name}`);
+            console.log('📊 Step 2: Analyzing financial document...');
             const financialBuffer = Buffer.from(await financialFile.arrayBuffer());
             financials = await analyzeFinancialDocument(financialBuffer, financialFile.type);
-            console.log(`✅ Financial data extracted: ${financials.length} years`);
+            console.log(`✅ Financials extracted: ${financials.length} years`);
         } else {
             console.log('⚠️ No financial document, using mock data');
             financials = generateMockFinancials(companyData.nazwa || 'Spółka');
         }
 
-        // Generuj sekcje AI
-        console.log('🤖 Generating AI sections...');
-        const sections = await generateMemorandumSections(companyData, financials);
+        // 3. Generuj sekcje memorandum przez Claude (sekcja po sekcji)
+        console.log('📝 Step 3: Generating memorandum sections with Claude...');
+        const memorandum = await generateFullMemorandum(companyData, financials);
+        console.log(`✅ Generated ${memorandum.sections.length} sections`);
 
-        // Konwertuj na kontekst dokumentu
-        const context = sectionsToMemorandumContext(companyData, financials, sections);
+        // 4. Generuj dokument Word
+        console.log('📄 Step 4: Generating Word document...');
+        const documentBuffer = await generateProfessionalMemorandum(
+            companyData,
+            financials,
+            memorandum.sections
+        );
 
-        // Generuj dokument Word
-        console.log('📄 Generating Word document...');
-        const documentBuffer = await generateMemorandum(context);
-
-        const filename = `Memorandum_${(companyData.nazwa || 'Spolka').replace(/[^a-zA-Z0-9]/g, '_').slice(0, 30)}_${Date.now()}.docx`;
+        const filename = `Memorandum_${(companyData.nazwa || 'Spolka')
+            .replace(/[^a-zA-Z0-9]/g, '_')
+            .slice(0, 30)}_${Date.now()}.docx`;
 
         console.log('✅ Document generated successfully!');
+        console.log(`   Estimated tokens used: ${memorandum.tokensUsed}`);
 
         return new NextResponse(new Uint8Array(documentBuffer), {
             headers: {
