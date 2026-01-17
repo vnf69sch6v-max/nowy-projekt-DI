@@ -45,11 +45,13 @@ async function extractTextFromPDF(buffer: Buffer): Promise<string> {
  * Analizuje PDF przez Gemini Vision (gdy pdf-parse nie działa)
  */
 async function analyzeWithGeminiVision(pdfBuffer: Buffer, prompt: string): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
+    // Użyj gemini-1.5-pro dla lepszego wsparcia PDF
+    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
 
     const base64 = pdfBuffer.toString('base64');
 
     try {
+        console.log('Sending PDF to Gemini 1.5 Pro Vision...');
         const result = await model.generateContent([
             prompt,
             {
@@ -59,10 +61,12 @@ async function analyzeWithGeminiVision(pdfBuffer: Buffer, prompt: string): Promi
                 },
             },
         ]);
-        return result.response.text();
+        const text = result.response.text();
+        console.log('Gemini Vision response:', text.substring(0, 200));
+        return text;
     } catch (error) {
         console.error('Gemini Vision error:', error);
-        throw new Error('Nie udało się przeanalizować PDF');
+        throw new Error('Nie udało się przeanalizować PDF przez Gemini Vision');
     }
 }
 
