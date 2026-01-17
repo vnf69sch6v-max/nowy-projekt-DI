@@ -316,16 +316,35 @@ export async function generateProfessionalPDF(
         if (/^[IVX]+\.\s/.test(trimmed)) {
             y -= 25;
 
+            // Określ kolor i symbol na podstawie sekcji
+            let sectionColor = rgb(0.95, 0.95, 0.97);
+            let sectionIcon = '';
+
+            if (trimmed.includes('RYZY') || trimmed.includes('RISK')) {
+                sectionColor = rgb(1, 0.95, 0.93); // Jasnoróżowy dla ryzyk
+                sectionIcon = '[!] ';
+            } else if (trimmed.includes('FINANS') || trimmed.includes('SPRAWOZD')) {
+                sectionColor = rgb(0.93, 0.97, 0.95); // Jasnozielony dla finansów
+                sectionIcon = '[$] ';
+            } else if (trimmed.includes('OFERT') || trimmed.includes('AKCJI')) {
+                sectionColor = rgb(0.93, 0.95, 1); // Jasnoniebieski dla oferty
+                sectionIcon = '[>] ';
+            } else if (trimmed.includes('EMITENT')) {
+                sectionColor = rgb(0.97, 0.95, 0.93); // Jasnożółty dla emitenta
+                sectionIcon = '[i] ';
+            }
+
             // Tło dla nagłówka sekcji
             currentPage.drawRectangle({
                 x: MARGIN - 5,
                 y: y - 5,
                 width: CONTENT_WIDTH + 10,
                 height: 24,
-                color: rgb(0.95, 0.95, 0.97),
+                color: sectionColor,
             });
 
-            currentPage.drawText(trimmed.toUpperCase(), {
+            // Tekst nagłówka z ikoną
+            currentPage.drawText(sectionIcon + trimmed.toUpperCase(), {
                 x: MARGIN, y, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.2)
             });
             y -= 25;
@@ -397,8 +416,27 @@ export async function generateProfessionalPDF(
         }
 
         // Zwykły tekst - z wcięciem i WYJUSTOWANIEM
+        // Sprawdź czy zawiera [DO UZUPELNIENIA] i podświetl na czerwono
+        const hasPlaceholder = trimmed.includes('[DO UZUPELNIENIA]') ||
+            trimmed.includes('[DO UZUPEŁNIENIA]') ||
+            trimmed.includes('[_]');
+
         const textIndent = 20;
         const textWidth = CONTENT_WIDTH - textIndent;
+
+        // Jeśli linia zawiera placeholder - narysuj czerwone tło
+        if (hasPlaceholder) {
+            const lineHeight = 16;
+            currentPage.drawRectangle({
+                x: MARGIN + textIndent - 2,
+                y: y - 4,
+                width: textWidth + 4,
+                height: lineHeight,
+                color: rgb(1, 0.93, 0.93), // Jasnoróżowe tło
+                borderColor: rgb(0.9, 0.5, 0.5),
+                borderWidth: 0.5,
+            });
+        }
         const wrappedLines = wrapText(trimmed, font, 10, textWidth);
         for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
             if (y < MARGIN + 50) {
@@ -871,15 +909,57 @@ function drawLine(page: PDFPage, x: number, y: number, width: number, thickness:
     });
 }
 
-function addPageFooter(page: PDFPage, pageNum: number, font: PDFFont) {
-    const text = `Strona ${pageNum}`;
-    const width = font.widthOfTextAtSize(text, 9);
-    page.drawText(text, {
-        x: (PAGE_WIDTH - width) / 2,
-        y: 30,
+function addPageFooter(
+    page: PDFPage,
+    pageNum: number,
+    font: PDFFont,
+    totalPages?: number,
+    companyName?: string,
+    docDate?: string
+) {
+    // Lewa strona: nazwa spółki i data
+    if (companyName) {
+        const leftText = `Memorandum - ${companyName}`;
+        page.drawText(leftText, {
+            x: MARGIN,
+            y: 25,
+            size: 7,
+            font,
+            color: rgb(0.5, 0.5, 0.5)
+        });
+    }
+
+    // Środek: data dokumentu
+    if (docDate) {
+        const dateWidth = font.widthOfTextAtSize(docDate, 7);
+        page.drawText(docDate, {
+            x: (PAGE_WIDTH - dateWidth) / 2,
+            y: 25,
+            size: 7,
+            font,
+            color: rgb(0.5, 0.5, 0.5)
+        });
+    }
+
+    // Prawa strona: numeracja X z Y
+    const pageText = totalPages
+        ? `Strona ${pageNum} z ${totalPages}`
+        : `Strona ${pageNum}`;
+    const width = font.widthOfTextAtSize(pageText, 9);
+    page.drawText(pageText, {
+        x: PAGE_WIDTH - MARGIN - width,
+        y: 25,
         size: 9,
         font,
-        color: rgb(0.5, 0.5, 0.5)
+        color: rgb(0.4, 0.4, 0.4)
+    });
+
+    // Linia separująca nad stopką
+    page.drawLine({
+        start: { x: MARGIN, y: 40 },
+        end: { x: PAGE_WIDTH - MARGIN, y: 40 },
+        thickness: 0.3,
+        color: rgb(0.8, 0.8, 0.8),
     });
 }
 
