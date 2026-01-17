@@ -308,22 +308,92 @@ export async function generateProfessionalPDF(
     currentPage.drawText('SPIS TRESCI', { x: MARGIN, y, size: 14, font: fontBold, color: rgb(0.1, 0.1, 0.15) });
     y -= 30;
 
-    const sections = [
-        'I. WSTEP',
-        'II. CZYNNIKI RYZYKA',
-        'III. OSOBY ODPOWIEDZIALNE',
-        'IV. DANE O OFERCIE AKCJI',
-        'V. DANE O EMITENCIE',
-        'VI. SPRAWOZDANIA FINANSOWE',
-        'VII. ZALACZNIKI',
+    const tocSections = [
+        { title: 'I. WSTEP', page: 3 },
+        { title: 'II. CZYNNIKI RYZYKA', page: 5 },
+        { title: 'III. OSOBY ODPOWIEDZIALNE', page: 8 },
+        { title: 'IV. DANE O OFERCIE AKCJI', page: 9 },
+        { title: 'V. DANE O EMITENCIE', page: 12 },
+        { title: 'VI. SPRAWOZDANIA FINANSOWE', page: 16 },
+        { title: 'VII. ZALACZNIKI', page: 19 },
     ];
 
-    for (const section of sections) {
-        currentPage.drawText(section, { x: MARGIN + 10, y, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
-        y -= 18;
+    for (const section of tocSections) {
+        // Tytuł sekcji
+        currentPage.drawText(section.title, { x: MARGIN + 10, y, size: 11, font, color: rgb(0.2, 0.2, 0.2) });
+
+        // Leader dots (kropki prowadzące)
+        const titleWidth = font.widthOfTextAtSize(section.title, 11);
+        const pageNumText = `${section.page}`;
+        const pageNumWidth = font.widthOfTextAtSize(pageNumText, 11);
+        const dotsWidth = CONTENT_WIDTH - titleWidth - pageNumWidth - 30;
+        const dotCount = Math.floor(dotsWidth / 4);
+        const dots = '.'.repeat(Math.max(0, dotCount));
+
+        currentPage.drawText(dots, {
+            x: MARGIN + 10 + titleWidth + 10,
+            y,
+            size: 11,
+            font,
+            color: rgb(0.7, 0.7, 0.7)
+        });
+
+        // Numer strony (wyrównany do prawej)
+        currentPage.drawText(pageNumText, {
+            x: PAGE_WIDTH - MARGIN - pageNumWidth,
+            y,
+            size: 11,
+            font: fontBold,
+            color: rgb(0.3, 0.3, 0.4)
+        });
+
+        y -= 20;
     }
 
-    y -= 20;
+    y -= 15;
+    drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
+    y -= 25;
+
+    // ========================================
+    // DISCLAIMER O RYZYKU INWESTYCYJNYM
+    // ========================================
+
+    // Tło disclaimer
+    currentPage.drawRectangle({
+        x: MARGIN,
+        y: y - 70,
+        width: CONTENT_WIDTH,
+        height: 70,
+        color: rgb(1, 0.97, 0.92),
+        borderColor: rgb(0.9, 0.6, 0.2),
+        borderWidth: 1,
+    });
+
+    // Ikona ostrzeżenia
+    currentPage.drawText('[!] OSTRZEZENIE O RYZYKU', {
+        x: MARGIN + 10,
+        y: y - 18,
+        size: 10,
+        font: fontBold,
+        color: rgb(0.8, 0.4, 0.1)
+    });
+
+    // Tekst ostrzeżenia
+    const disclaimerText = 'Inwestowanie w akcje wiaze sie z ryzykiem utraty czesci lub calosci zainwestowanych srodkow. Przed podjciem decyzji inwestycyjnej nalezy zapoznac sie z trescia memorandum informacyjnego, w tym z czynnikami ryzyka.';
+    const disclaimerLines = wrapText(disclaimerText, font, 9, CONTENT_WIDTH - 20);
+    let disclaimerY = y - 35;
+    for (const line of disclaimerLines) {
+        currentPage.drawText(line, {
+            x: MARGIN + 10,
+            y: disclaimerY,
+            size: 9,
+            font,
+            color: rgb(0.3, 0.2, 0.1)
+        });
+        disclaimerY -= 12;
+    }
+
+    y -= 90;
     drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
 
     // ========================================
