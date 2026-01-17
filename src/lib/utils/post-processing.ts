@@ -80,6 +80,78 @@ export function removeDuplicateSections(content: string): string {
 }
 
 /**
+ * Usuwa podwójne nagłówki sekcji (np. "I. WSTEP" powtórzone)
+ */
+export function removeDuplicateHeaders(content: string): string {
+    const lines = content.split('\n');
+    const seenHeaders = new Set<string>();
+    const result: string[] = [];
+
+    // Wzorce nagłówków sekcji
+    const headerPattern = /^[IVX]+\.\s+[A-Z]/; // I. WSTEP, II. CZYNNIKI, etc.
+    const subHeaderPattern = /^§?\d+\.\s+/; // §11., 12., etc.
+
+    for (const line of lines) {
+        const trimmed = line.trim().toUpperCase();
+
+        // Sprawdź czy to nagłówek sekcji głównej
+        if (headerPattern.test(trimmed)) {
+            // Wyciągnij tylko numer sekcji (I., II., etc.)
+            const sectionMatch = trimmed.match(/^([IVX]+\.)/);
+            if (sectionMatch) {
+                const sectionKey = sectionMatch[1];
+                if (seenHeaders.has(sectionKey)) {
+                    // Pomiń duplikat
+                    continue;
+                }
+                seenHeaders.add(sectionKey);
+            }
+        }
+
+        result.push(line);
+    }
+
+    return result.join('\n');
+}
+
+/**
+ * Naprawia formatowanie roku (np. "2 024" → "2024", "2 025" → "2025")
+ */
+export function fixYearFormatting(content: string): string {
+    let result = content;
+
+    // Naprawa roku z błędną spacją: "2 024" → "2024", "2 025" → "2025"
+    result = result.replace(/\b2\s+0\s*(\d{2})\b/g, '20$1');
+    result = result.replace(/\b2\s0(\d{2})\b/g, '20$1');
+
+    // Specyficzne przypadki
+    result = result.replace(/2 024/g, '2024');
+    result = result.replace(/2 025/g, '2025');
+    result = result.replace(/2 026/g, '2026');
+
+    return result;
+}
+
+/**
+ * Standaryzuje numerację w dokumencie
+ */
+export function standardizeNumbering(content: string): string {
+    let result = content;
+
+    // Upewnij się że paragrafy mają symbol § 
+    // Zamień "11." na "§11." tylko na początku linii po sekcji głównej
+    // To jest trudniejsze - na razie tylko cleanup
+
+    // Usuń podwójne spacje
+    result = result.replace(/  +/g, ' ');
+
+    // Usuń spacje przed dwukropkiem
+    result = result.replace(/\s+:/g, ':');
+
+    return result;
+}
+
+/**
  * Zastępuje puste [DO UZUPEŁNIENIA] inteligentnymi sugestiami
  */
 export function smartPlaceholders(content: string, context: {
@@ -123,21 +195,30 @@ export function postProcessContent(content: string, context?: {
 }): string {
     let result = content;
 
-    // 1. Usuń powtarzające się sekcje
+    // 1. Napraw formatowanie roku (2 024 → 2024)
+    result = fixYearFormatting(result);
+
+    // 2. Usuń podwójne nagłówki sekcji
+    result = removeDuplicateHeaders(result);
+
+    // 3. Usuń powtarzające się sekcje
     result = removeDuplicateSections(result);
 
-    // 2. Normalizacja formatów
+    // 4. Standaryzuj numerację
+    result = standardizeNumbering(result);
+
+    // 5. Normalizacja formatów
     result = normalizeFormats(result);
 
-    // 3. Usuń duplikaty zdań
+    // 6. Usuń duplikaty zdań
     result = removeDuplicates(result);
 
-    // 4. Smart placeholders (jeśli podano kontekst)
+    // 7. Smart placeholders (jeśli podano kontekst)
     if (context) {
         result = smartPlaceholders(result, context);
     }
 
-    // 5. Cleanup - nadmiarowe puste linie
+    // 8. Cleanup - nadmiarowe puste linie
     result = result.replace(/\n{4,}/g, '\n\n\n');
 
     return result.trim();
