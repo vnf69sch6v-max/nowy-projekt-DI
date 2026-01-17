@@ -133,19 +133,87 @@ export function fixYearFormatting(content: string): string {
 }
 
 /**
- * Standaryzuje numerację w dokumencie
+ * Standaryzuje numerację w dokumencie - naprawia skoki i luki
  */
 export function standardizeNumbering(content: string): string {
     let result = content;
+    const lines = result.split('\n');
+    const processedLines: string[] = [];
 
-    // Upewnij się że paragrafy mają symbol § 
-    // Zamień "11." na "§11." tylko na początku linii po sekcji głównej
-    // To jest trudniejsze - na razie tylko cleanup
+    // Śledź aktualną numerację dla różnych poziomów
+    let currentParagraph = 0; // §11, §12, etc.
+    let currentPoint = 0;     // 1., 2., 3. - resetuje się w każdym §
+    let lastSectionNum = 0;   // I., II., III.
 
-    // Usuń podwójne spacje
+    for (const line of lines) {
+        let processedLine = line;
+        const trimmed = line.trim();
+
+        // Sekcja główna (I., II., III., etc.) - reset punktów
+        const sectionMatch = trimmed.match(/^([IVX]+)\.\s+(.+)/);
+        if (sectionMatch) {
+            currentPoint = 0; // Reset numeracji punktów
+            processedLines.push(processedLine);
+            continue;
+        }
+
+        // Paragraf (§xx. lub xx. gdzie xx >= 10)
+        const paragraphMatch = trimmed.match(/^(§?)(\d{2,})\.\s+(.+)/);
+        if (paragraphMatch) {
+            const hasSymbol = paragraphMatch[1] === '§';
+            const num = parseInt(paragraphMatch[2]);
+            const text = paragraphMatch[3];
+
+            // Jeśli to pierwszy paragraf lub numer jest rozsądny (różnica <= 5)
+            if (currentParagraph === 0) {
+                currentParagraph = num; // Zachowaj oryginalny numer startowy
+            } else if (num > currentParagraph + 5) {
+                // Skok jest zbyt duży - normalizuj
+                currentParagraph++;
+            } else {
+                currentParagraph = num;
+            }
+
+            currentPoint = 0; // Reset punktów w nowym paragrafie
+
+            // Dodaj symbol § jeśli brakuje
+            const indent = line.match(/^(\s*)/)?.[1] || '';
+            processedLine = `${indent}§${currentParagraph}. ${text}`;
+            processedLines.push(processedLine);
+            continue;
+        }
+
+        // Punkt numerowany (1., 2., 3., etc.) - normalizacja sekwencji
+        const pointMatch = trimmed.match(/^(\d+)\.\s+(.+)/);
+        if (pointMatch) {
+            const num = parseInt(pointMatch[1]);
+            const text = pointMatch[2];
+
+            // Jeśli numer jest zbyt duży (skok > 3), normalizuj
+            if (num > currentPoint + 3) {
+                currentPoint++;
+            } else {
+                currentPoint = num;
+            }
+
+            const indent = line.match(/^(\s*)/)?.[1] || '';
+            // Zachowaj oryginalny numer jeśli nie ma skoku
+            if (num <= currentPoint + 1) {
+                processedLines.push(processedLine);
+            } else {
+                processedLine = `${indent}${currentPoint}. ${text}`;
+                processedLines.push(processedLine);
+            }
+            continue;
+        }
+
+        processedLines.push(processedLine);
+    }
+
+    result = processedLines.join('\n');
+
+    // Dodatkowy cleanup
     result = result.replace(/  +/g, ' ');
-
-    // Usuń spacje przed dwukropkiem
     result = result.replace(/\s+:/g, ':');
 
     return result;
