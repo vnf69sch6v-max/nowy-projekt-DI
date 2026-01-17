@@ -1,9 +1,23 @@
 /**
  * Generator PDF dla memorandum
- * Używa pdf-lib (bez zewnętrznych zależności)
+ * Używa pdf-lib z obsługą polskich znaków
  */
 
 import { PDFDocument, StandardFonts, rgb } from 'pdf-lib';
+
+/**
+ * Zamienia polskie znaki na ASCII (pdf-lib nie obsługuje Unicode w StandardFonts)
+ */
+function sanitizePolish(text: string): string {
+    const polishMap: Record<string, string> = {
+        'ą': 'a', 'ć': 'c', 'ę': 'e', 'ł': 'l', 'ń': 'n',
+        'ó': 'o', 'ś': 's', 'ź': 'z', 'ż': 'z',
+        'Ą': 'A', 'Ć': 'C', 'Ę': 'E', 'Ł': 'L', 'Ń': 'N',
+        'Ó': 'O', 'Ś': 'S', 'Ź': 'Z', 'Ż': 'Z',
+    };
+
+    return text.split('').map(char => polishMap[char] || char).join('');
+}
 
 export async function generateMemorandumPDF(content: string, companyName: string): Promise<Uint8Array> {
     const pdfDoc = await PDFDocument.create();
@@ -17,13 +31,16 @@ export async function generateMemorandumPDF(content: string, companyName: string
     const pageHeight = 842;
     const contentWidth = pageWidth - 2 * margin;
 
-    // Podziel content na linie
-    const lines = content.split('\n');
+    // Sanitize content
+    const safeContent = sanitizePolish(content);
+    const safeCompanyName = sanitizePolish(companyName);
+
+    const lines = safeContent.split('\n');
     let currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
     let y = pageHeight - margin;
     let pageNum = 1;
 
-    // Nagłówek na pierwszej stronie
+    // Header
     currentPage.drawText('MEMORANDUM INFORMACYJNE', {
         x: margin,
         y: y,
@@ -33,7 +50,7 @@ export async function generateMemorandumPDF(content: string, companyName: string
     });
     y -= 30;
 
-    currentPage.drawText(companyName, {
+    currentPage.drawText(safeCompanyName, {
         x: margin,
         y: y,
         size: 14,
@@ -42,11 +59,8 @@ export async function generateMemorandumPDF(content: string, companyName: string
     });
     y -= 40;
 
-    // Rysuj linie
     for (const line of lines) {
-        // Nowa strona jeśli potrzeba
         if (y < margin + 50) {
-            // Stopka
             currentPage.drawText(`Strona ${pageNum}`, {
                 x: pageWidth / 2 - 20,
                 y: 30,
@@ -60,18 +74,18 @@ export async function generateMemorandumPDF(content: string, companyName: string
             pageNum++;
         }
 
-        // Sprawdź czy nagłówek (zaczyna się od I., II., etc. lub zawiera ═ lub ─)
-        const isHeader = /^[IVX]+\.\s/.test(line.trim()) || line.includes('═') || line.includes('─');
+        // Check if header
+        const isHeader = /^[IVX]+\.\s/.test(line.trim());
         const currentFont = isHeader ? fontBold : font;
-        const currentSize = isHeader && /^[IVX]+\.\s/.test(line.trim()) ? 12 : fontSize;
+        const currentSize = isHeader ? 12 : fontSize;
 
-        // Pomiń linie z samymi znakami ramki (długie)
+        // Skip decorative lines
         if (line.match(/^[═─┌┐└┘├┤┬┴┼│]+$/)) {
             y -= lineHeight / 2;
             continue;
         }
 
-        // Zawijanie tekstu
+        // Word wrap
         const words = line.split(' ');
         let currentLine = '';
 
@@ -117,11 +131,11 @@ export async function generateMemorandumPDF(content: string, companyName: string
             });
             y -= lineHeight;
         } else {
-            y -= lineHeight / 2; // Pusta linia
+            y -= lineHeight / 2;
         }
     }
 
-    // Stopka ostatniej strony
+    // Footer last page
     currentPage.drawText(`Strona ${pageNum}`, {
         x: pageWidth / 2 - 20,
         y: 30,
@@ -130,6 +144,5 @@ export async function generateMemorandumPDF(content: string, companyName: string
         color: rgb(0.5, 0.5, 0.5),
     });
 
-    // Zwróć PDF jako Uint8Array
     return pdfDoc.save();
 }

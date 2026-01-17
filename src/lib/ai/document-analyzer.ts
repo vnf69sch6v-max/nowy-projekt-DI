@@ -1,102 +1,95 @@
 /**
- * Analizator dokumentów - ZOPTYMALIZOWANY
- * 1. pdf-parse do ekstrakcji tekstu (0 tokenów)
- * 2. Fallback: Gemini Vision dla PDF
- * 3. Gemini do analizy (darmowy tier)
+ * Analizator dokumentów - Claude z retry logic
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import Anthropic from '@anthropic-ai/sdk';
 import { KRSCompany, FinancialData } from '@/types';
 
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
+const anthropic = new Anthropic({
+    apiKey: process.env.ANTHROPIC_API_KEY,
+});
 
-// Minimalne prompty dla oszczędności tokenów
-const KRS_PROMPT = `Wyekstrahuj dane z odpisu KRS. Zwróć TYLKO JSON (bez markdown):
-{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"data":"","zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
+// Minimalne prompty
+const KRS_PROMPT = `Przeanalizuj odpis KRS i zwróć TYLKO JSON (bez markdown):
+{"nazwa":"","krs":"","nip":"","regon":"","forma":"","adres":"","kapital":0,"zarzad":[{"imie":"","nazwisko":"","funkcja":""}],"reprezentacja":"","pkd":[{"kod":"","opis":""}]}`;
 
-const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON (bez markdown):
+const FIN_PROMPT = `Wyekstrahuj dane finansowe. Zwróć TYLKO JSON:
 {"lata":[{"rok":2024,"przychody":0,"zysk":0,"bilans":0,"kapital":0,"zobowiazania":0}]}`;
 
 /**
- * Ekstrakcja tekstu z PDF - z fallbackiem
+ * Sleep helper
  */
-async function extractTextFromPDF(buffer: Buffer): Promise<string> {
-    try {
-        // Próba 1: pdf-parse
-        const pdfParseModule = await import('pdf-parse');
-        const pdfParse = typeof pdfParseModule === 'function'
-            ? pdfParseModule
-            : (pdfParseModule as { default?: unknown }).default || pdfParseModule;
-
-        const data = await (pdfParse as (buffer: Buffer) => Promise<{ text: string }>)(buffer);
-
-        if (data.text && data.text.length > 100) {
-            console.log(`📄 pdf-parse: Extracted ${data.text.length} characters`);
-            return data.text;
-        }
-        throw new Error('PDF text too short');
-    } catch (error) {
-        console.log('pdf-parse failed, falling back to Gemini Vision:', error);
-        return ''; // Pusty tekst - użyjemy Gemini Vision
-    }
+function sleep(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 /**
- * Analizuje PDF przez Gemini Vision (gdy pdf-parse nie działa)
+ * Analizuje PDF przez Claude z retry
  */
-async function analyzeWithGeminiVision(pdfBuffer: Buffer, prompt: string): Promise<string> {
-    // Użyj gemini-1.5-pro dla lepszego wsparcia PDF
-    const model = genAI.getGenerativeModel({ model: 'gemini-1.5-pro' });
-
+async function analyzeWithClaude(pdfBuffer: Buffer, prompt: string, retries = 3): Promise<string> {
     const base64 = pdfBuffer.toString('base64');
 
-    try {
-        console.log('Sending PDF to Gemini 1.5 Pro Vision...');
-        const result = await model.generateContent([
-            prompt,
-            {
-                inlineData: {
-                    mimeType: 'application/pdf',
-                    data: base64,
-                },
-            },
-        ]);
-        const text = result.response.text();
-        console.log('Gemini Vision response:', text.substring(0, 200));
-        return text;
-    } catch (error) {
-        console.error('Gemini Vision error:', error);
-        throw new Error('Nie udało się przeanalizować PDF przez Gemini Vision');
-    }
-}
+    for (let attempt = 1; attempt <= retries; attempt++) {
+        try {
+            console.log(`Claude attempt ${attempt}/${retries}...`);
 
-/**
- * Analizuje tekst przez Gemini (darmowy tier!)
- */
-async function analyzeWithGemini(text: string, prompt: string): Promise<string> {
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-    const truncatedText = text.slice(0, 15000);
+            const response = await anthropic.messages.create({
+                model: 'claude-sonnet-4-20250514',
+                max_tokens: 1024,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'document',
+                                source: {
+                                    type: 'base64',
+                                    media_type: 'application/pdf',
+                                    data: base64,
+                                },
+                            },
+                            {
+                                type: 'text',
+                                text: prompt,
+                            },
+                        ],
+                    },
+                ],
+            });
 
-    try {
-        const result = await model.generateContent(`${prompt}\n\nTEKST:\n${truncatedText}`);
-        return result.response.text();
-    } catch (error) {
-        console.error('Gemini error:', error);
-        throw error;
+            const text = response.content[0].type === 'text' ? response.content[0].text : '';
+            console.log('Claude response:', text.substring(0, 200));
+            return text;
+        } catch (error) {
+            const err = error as { status?: number; message?: string };
+            console.error(`Claude attempt ${attempt} failed:`, err.message || error);
+
+            if (err.status === 429) {
+                // Rate limit - wait and retry
+                const waitTime = attempt * 30000; // 30s, 60s, 90s
+                console.log(`Rate limited, waiting ${waitTime / 1000}s...`);
+                await sleep(waitTime);
+            } else if (attempt === retries) {
+                throw new Error(`Claude API error after ${retries} attempts: ${err.message || 'unknown'}`);
+            } else {
+                await sleep(5000);
+            }
+        }
     }
+
+    throw new Error('Claude analysis failed');
 }
 
 /**
  * Parsuje JSON z odpowiedzi AI
  */
 function parseJSON(text: string): Record<string, unknown> {
-    // Usuń markdown code blocks
-    let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+    let clean = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
     const jsonMatch = clean.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-        console.error('No JSON found in:', text.substring(0, 200));
-        throw new Error('Brak JSON w odpowiedzi AI');
+        console.error('No JSON in:', text.substring(0, 300));
+        throw new Error('Brak JSON w odpowiedzi');
     }
 
     let jsonStr = jsonMatch[0]
@@ -110,26 +103,9 @@ function parseJSON(text: string): Record<string, unknown> {
  * Analizuje odpis KRS
  */
 export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
-    console.log('📄 Analyzing KRS document...');
+    console.log('📄 Analyzing KRS document with Claude...');
 
-    // 1. Próba ekstrakcji tekstu
-    const text = await extractTextFromPDF(pdfBuffer);
-
-    let response: string;
-
-    if (text.length > 100) {
-        // Mamy tekst - użyj Gemini text
-        console.log('Using Gemini text analysis');
-        response = await analyzeWithGemini(text, KRS_PROMPT);
-    } else {
-        // Brak tekstu - użyj Gemini Vision
-        console.log('Using Gemini Vision for PDF');
-        response = await analyzeWithGeminiVision(pdfBuffer, KRS_PROMPT);
-    }
-
-    console.log('Gemini response:', response.substring(0, 300));
-
-    // Parsowanie
+    const response = await analyzeWithClaude(pdfBuffer, KRS_PROMPT);
     const d = parseJSON(response) as Record<string, unknown>;
 
     return {
@@ -171,15 +147,8 @@ export async function analyzeFinancialDocument(
         return parseExcelFinancials(buffer);
     }
 
-    // PDF - próbuj tekst, potem Vision
-    const text = await extractTextFromPDF(buffer);
-
-    let response: string;
-    if (text.length > 100) {
-        response = await analyzeWithGemini(text, FIN_PROMPT);
-    } else {
-        response = await analyzeWithGeminiVision(buffer, FIN_PROMPT);
-    }
+    // PDF - Claude
+    const response = await analyzeWithClaude(buffer, FIN_PROMPT);
 
     try {
         const d = parseJSON(response) as {
@@ -205,7 +174,6 @@ export async function analyzeFinancialDocument(
             aktywaTrwale: 0,
         }));
     } catch {
-        console.error('Failed to parse financials');
         return [];
     }
 }
