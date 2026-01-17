@@ -198,36 +198,42 @@ FORMATOWANIE - SCISLE ZASADY:
 6. Gdzie brak danych: [DO UZUPELNIENIA]
 7. Pisz profesjonalnym jezykiem prawniczym
 
-=== KRYTYCZNE ZASADY NUMERACJI ===
+=== KRYTYCZNE INSTRUKCJE FORMATOWANIA ===
 
-POZIOM 1 - SEKCJA GLOWNA (tylko RAZ na dokument!):
-I., II., III., IV., V., VI., VII.
+*** NIE NUMERUJ PUNKTOW! ***
 
-POZIOM 2 - PARAGRAFY (ciagla numeracja w calym dokumencie):
-§11., §12., §13., §14., ..., §49., §50., §51., §52.
-NIGDY nie resetuj numeracji paragrafow!
+System post-processingu sam doda numeracje. Ty pisz tylko tytuly i tresc.
 
-POZIOM 3 - PUNKTY WEWNATRZ PARAGRAFU (resetuj w kazdym §):
-1., 2., 3., 4., 5. (resetuje sie w kazdym nowym §)
+STRUKTURA TEKSTU (bez numerow!):
+- Tytul paragrafu (np. "Emitent", "Ryzyka operacyjne", "Cele emisji")
+- Pod nim punkty jako lista (BEZ numerow 1., 2., 3.)
+- Kazdy punkt to oddzielny akapit
 
-POZIOM 4 - PODPUNKTY:
-a), b), c) LUB i), ii), iii)
+PRZYKLAD PRAWIDLOWY:
 
-=== PRZYKLAD PRAWIDLOWY ===
+Emitent
+Pelna nazwa emitenta to RENDER CUBE SPOLKA AKCYJNA.
+Adres: ul. Ks. Biskupa Wincentego Tymienieckiego 22/24.
+KRS: 0000860872.
 
-II. CZYNNIKI RYZYKA
+Sprzedajacy
+Sprzedajacym jest Emitent.
 
-§11. Ryzyka zwiazane z dzialalnoscia emitenta
-1. Ryzyko konkurencji
-   Opis ryzyka w 3-5 zdaniach...
-2. Ryzyko utraty pracownikow
-   Opis ryzyka...
+Ryzyka operacyjne
 
-§12. Ryzyka o charakterze finansowym
-1. Ryzyko plynnosci
-   Opis...
-2. Ryzyko walutowe
-   Opis...
+Ryzyko konkurencji
+Spolka dziala na konkurencyjnym rynku gier komputerowych...
+
+Ryzyko utraty pracownikow
+Spolka jest zalezna od kluczowych pracownikow...
+
+=== CZEGO NIE ROBIC ===
+- NIE pisz "1.", "2.", "3." przed punktami
+- NIE pisz "§11.", "§12." przed paragrafami  
+- NIE pisz "a)", "b)", "c)" przed podpunktami
+- NIE pisz "I.", "II.", "III." przed sekcjami (to juz jest w naglowku)
+
+System sam doda poprawna, ciagla numeracje!
 
 === BLEDY DO UNIKANIA ===
 - NIE uzywaj: "6. Ryzyko..." a potem "1. Ryzyko..." - to chaos!
