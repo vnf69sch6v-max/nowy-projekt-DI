@@ -1,13 +1,12 @@
 /**
- * Analizator dokumentów - Claude z retry logic
+ * Analizator dokumentów - TYLKO GEMINI
+ * Gemini z retry logic dla 429 errors
  */
 
-import Anthropic from '@anthropic-ai/sdk';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 import { KRSCompany, FinancialData } from '@/types';
 
-const anthropic = new Anthropic({
-    apiKey: process.env.ANTHROPIC_API_KEY,
-});
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // Minimalne prompty
 const KRS_PROMPT = `Przeanalizuj odpis KRS i zwróć TYLKO JSON (bez markdown):
@@ -24,60 +23,47 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Analizuje PDF przez Claude z retry
+ * Analizuje PDF przez Gemini z retry
  */
-async function analyzeWithClaude(pdfBuffer: Buffer, prompt: string, retries = 3): Promise<string> {
+async function analyzeWithGemini(pdfBuffer: Buffer, prompt: string, retries = 3): Promise<string> {
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
     const base64 = pdfBuffer.toString('base64');
 
     for (let attempt = 1; attempt <= retries; attempt++) {
         try {
-            console.log(`Claude attempt ${attempt}/${retries}...`);
+            console.log(`Gemini attempt ${attempt}/${retries}...`);
 
-            const response = await anthropic.messages.create({
-                model: 'claude-sonnet-4-20250514',
-                max_tokens: 1024,
-                messages: [
-                    {
-                        role: 'user',
-                        content: [
-                            {
-                                type: 'document',
-                                source: {
-                                    type: 'base64',
-                                    media_type: 'application/pdf',
-                                    data: base64,
-                                },
-                            },
-                            {
-                                type: 'text',
-                                text: prompt,
-                            },
-                        ],
+            const result = await model.generateContent([
+                prompt,
+                {
+                    inlineData: {
+                        mimeType: 'application/pdf',
+                        data: base64,
                     },
-                ],
-            });
+                },
+            ]);
 
-            const text = response.content[0].type === 'text' ? response.content[0].text : '';
-            console.log('Claude response:', text.substring(0, 200));
+            const text = result.response.text();
+            console.log('Gemini response:', text.substring(0, 200));
             return text;
         } catch (error) {
             const err = error as { status?: number; message?: string };
-            console.error(`Claude attempt ${attempt} failed:`, err.message || error);
+            console.error(`Gemini attempt ${attempt} failed:`, err.message || error);
 
-            if (err.status === 429) {
+            if (err.message?.includes('429') || err.message?.includes('quota')) {
                 // Rate limit - wait and retry
-                const waitTime = attempt * 30000; // 30s, 60s, 90s
+                const waitTime = attempt * 35000; // 35s, 70s, 105s
                 console.log(`Rate limited, waiting ${waitTime / 1000}s...`);
                 await sleep(waitTime);
             } else if (attempt === retries) {
-                throw new Error(`Claude API error after ${retries} attempts: ${err.message || 'unknown'}`);
+                throw new Error(`Gemini API error after ${retries} attempts: ${err.message || 'unknown'}`);
             } else {
                 await sleep(5000);
             }
         }
     }
 
-    throw new Error('Claude analysis failed');
+    throw new Error('Gemini analysis failed');
 }
 
 /**
@@ -103,9 +89,9 @@ function parseJSON(text: string): Record<string, unknown> {
  * Analizuje odpis KRS
  */
 export async function analyzeKRSDocument(pdfBuffer: Buffer): Promise<KRSCompany> {
-    console.log('📄 Analyzing KRS document with Claude...');
+    console.log('📄 Analyzing KRS document with Gemini...');
 
-    const response = await analyzeWithClaude(pdfBuffer, KRS_PROMPT);
+    const response = await analyzeWithGemini(pdfBuffer, KRS_PROMPT);
     const d = parseJSON(response) as Record<string, unknown>;
 
     return {
@@ -142,13 +128,13 @@ export async function analyzeFinancialDocument(
 ): Promise<FinancialData[]> {
     console.log('📊 Analyzing financial document...');
 
-    // Excel - parsuj lokalnie
+    // Excel - parsuj lokalnie (0 API)
     if (mimeType.includes('spreadsheet') || mimeType.includes('excel')) {
         return parseExcelFinancials(buffer);
     }
 
-    // PDF - Claude
-    const response = await analyzeWithClaude(buffer, FIN_PROMPT);
+    // PDF - Gemini
+    const response = await analyzeWithGemini(buffer, FIN_PROMPT);
 
     try {
         const d = parseJSON(response) as {
@@ -179,7 +165,7 @@ export async function analyzeFinancialDocument(
 }
 
 /**
- * Parsuje Excel lokalnie
+ * Parsuje Excel lokalnie (0 API!)
  */
 async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
     const XLSX = await import('xlsx');

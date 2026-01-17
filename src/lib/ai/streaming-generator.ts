@@ -1,12 +1,10 @@
 /**
- * Streaming Memorandum Generator - GEMINI (DARMOWY!)
- * Struktura zgodna z profesjonalnym memorandum (Dz.U. 2020.1053)
+ * Streaming Memorandum Generator - SZABLONY STATYCZNE
+ * Bez AI - wszystkie sekcje jako szablony z danymi z KRS
+ * Zero kosztów API dla generowania treści
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import { KRSCompany, FinancialData } from '@/types';
-
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || '');
 
 // ============================================
 // PEŁNA STRUKTURA MEMORANDUM
@@ -25,7 +23,7 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         id: 'intro',
         title: 'WSTĘP',
         paragraph: 'I',
-        requiresAI: true,
+        requiresAI: false,
         subsections: [
             'Spółka, której akcje są przedmiotem oferty publicznej („Emitent")',
             'Nazwa (firma) i siedziba lub imię i nazwisko oraz siedziba (miejsce zamieszkania) sprzedającego',
@@ -43,7 +41,7 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         id: 'risks',
         title: 'CZYNNIKI RYZYKA',
         paragraph: 'II',
-        requiresAI: true,
+        requiresAI: false,
         subsections: [
             'Czynniki ryzyka związane z działalnością i branżą emitenta oraz otoczeniem',
             'Czynniki ryzyka o charakterze finansowym',
@@ -55,16 +53,13 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         title: 'OSOBY ODPOWIEDZIALNE ZA INFORMACJE ZAWARTE W MEMORANDUM',
         paragraph: 'III',
         requiresAI: false,
-        subsections: [
-            'Emitent',
-            'Firma inwestycyjna',
-        ],
+        subsections: ['Emitent', 'Firma inwestycyjna'],
     },
     {
         id: 'offer',
         title: 'DANE O OFERCIE AKCJI',
         paragraph: 'IV',
-        requiresAI: true,
+        requiresAI: false,
         subsections: [
             'Szczegółowe określenie rodzajów, liczby oraz łącznej wartości papierów wartościowych',
             'Cele emisji, których realizacji mają służyć wpływy uzyskane z emisji',
@@ -83,7 +78,7 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         id: 'issuer',
         title: 'DANE O EMITENCIE',
         paragraph: 'V',
-        requiresAI: true,
+        requiresAI: false,
         subsections: [
             'Podstawowe dane o emitencie',
             'Wskazanie czasu trwania emitenta',
@@ -113,7 +108,7 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         id: 'financial',
         title: 'SPRAWOZDANIA FINANSOWE EMITENTA',
         paragraph: 'VI',
-        requiresAI: true,
+        requiresAI: false,
         subsections: [
             'Sprawozdanie zarządu z działalności emitenta',
             'Sprawozdanie finansowe emitenta',
@@ -143,21 +138,18 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
 
 export function generateTableOfContents(): string {
     let toc = 'Spis treści\n\n';
-
     for (const section of MEMORANDUM_SECTIONS) {
         toc += `${section.paragraph}. ${section.title}\n`;
         for (let i = 0; i < section.subsections.length; i++) {
-            const sub = section.subsections[i];
-            toc += `   ${i + 1}. ${sub}\n`;
+            toc += `   ${i + 1}. ${section.subsections[i]}\n`;
         }
         toc += '\n';
     }
-
     return toc;
 }
 
 // ============================================
-// STREAMING Z GEMINI
+// GENERATOR SEKCJI - SZABLONY STATYCZNE
 // ============================================
 
 export async function* streamMemorandumSection(
@@ -167,127 +159,431 @@ export async function* streamMemorandumSection(
 ): AsyncGenerator<string> {
     const section = MEMORANDUM_SECTIONS.find(s => s.id === sectionId);
     if (!section) {
-        yield `[ERROR] Nieznana sekcja: ${sectionId}`;
+        yield `[BŁĄD] Nieznana sekcja: ${sectionId}`;
         return;
     }
 
-    // Sekcje bez AI
-    if (!section.requiresAI) {
-        if (sectionId === 'responsible') {
-            yield* streamResponsiblePersons(company);
-            return;
-        }
-        if (sectionId === 'attachments') {
-            yield* streamAttachments();
-            return;
-        }
-    }
-
-    const prompt = generatePrompt(sectionId, section, company, financials);
-    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
-
-    try {
-        const result = await model.generateContentStream(prompt);
-        for await (const chunk of result.stream) {
-            const text = chunk.text();
-            if (text) yield text;
-        }
-    } catch (error) {
-        yield `\n[BŁĄD: ${error instanceof Error ? error.message : 'nieznany'}]\n`;
+    switch (sectionId) {
+        case 'intro':
+            yield* generateIntroSection(company);
+            break;
+        case 'risks':
+            yield* generateRisksSection(company);
+            break;
+        case 'responsible':
+            yield* generateResponsibleSection(company);
+            break;
+        case 'offer':
+            yield* generateOfferSection(company);
+            break;
+        case 'issuer':
+            yield* generateIssuerSection(company);
+            break;
+        case 'financial':
+            yield* generateFinancialSection(company, financials);
+            break;
+        case 'attachments':
+            yield* generateAttachmentsSection();
+            break;
     }
 }
 
 // ============================================
-// PROMPTY
+// I. WSTĘP
 // ============================================
 
-function generatePrompt(sectionId: string, section: SectionConfig, company: KRSCompany, financials: FinancialData[]): string {
-    const dane = `Spółka: ${company.nazwa}, KRS: ${company.krs}, NIP: ${company.nip}, REGON: ${company.regon}, Forma: ${company.formaOrganizacyjna}, Adres: ${company.siedzibaAdres}, Kapitał: ${company.kapitalZakladowy}zł, PKD: ${company.pkdPrzewazajace}, Zarząd: ${company.reprezentacja?.map(z => `${z.imie} ${z.nazwisko} (${z.funkcja})`).join(', ')}, Reprezentacja: ${company.sposobReprezentacji}`;
+async function* generateIntroSection(c: KRSCompany): AsyncGenerator<string> {
+    yield `1. SPÓŁKA, KTÓREJ AKCJE SĄ PRZEDMIOTEM OFERTY PUBLICZNEJ („EMITENT")
 
-    const fin = financials.length > 0
-        ? `Finanse: ${financials.map(f => `${f.rok}: przych. ${f.przychodyNetto}, zysk ${f.zyskNetto}, bilans ${f.sumaBilansowa}, kapitał ${f.kapitalWlasny}`).join('; ')}`
-        : '';
+${c.nazwa}
+${c.siedzibaAdres}
+KRS: ${c.krs}, NIP: ${c.nip}, REGON: ${c.regon}
+Kapitał zakładowy: ${c.kapitalZakladowy?.toLocaleString('pl-PL')} PLN
 
-    const subsectionsText = section.subsections.map((s, i) => `${i + 1}. ${s}`).join('\n');
+2. NAZWA (FIRMA) I SIEDZIBA SPRZEDAJĄCEGO
 
-    return `Napisz rozdział "${section.paragraph}. ${section.title}" memorandum informacyjnego dla spółki akcyjnej.
+[DO UZUPEŁNIENIA - jeśli sprzedający jest inny niż Emitent]
 
-DANE SPÓŁKI:
-${dane}
-${fin}
+3. LICZBA, RODZAJ, JEDNOSTKOWA WARTOŚĆ NOMINALNA PAPIERÓW WARTOŚCIOWYCH
 
-WYMAGANE PODSEKCJE (numeruj dokładnie tak):
-${subsectionsText}
+Przedmiotem oferty publicznej są akcje zwykłe na okaziciela serii [_].
+Liczba akcji: [DO UZUPEŁNIENIA]
+Wartość nominalna: [DO UZUPEŁNIENIA] PLN
 
-ZASADY:
-- Gdzie brak konkretnych danych, wpisz [DO UZUPEŁNIENIA]
-- Pisz profesjonalnym językiem prawniczym
-- Nie używaj markdown, tylko czysty tekst z numeracją
-- Każdą podsekcję rozpocznij od jej numeru i tytułu
-- Bądź szczegółowy i zgodny z rozporządzeniem Dz.U. 2020.1053`;
+4. PODMIOT UDZIELAJĄCY ZABEZPIECZENIA
+
+Emisja akcji nie jest objęta gwarancją ani zabezpieczeniem.
+
+5. CENA EMISYJNA
+
+Cena emisyjna: [DO UZUPEŁNIENIA] PLN za jedną akcję
+Sposób ustalenia: [DO UZUPEŁNIENIA]
+
+6. OŚWIADCZENIE
+
+Oferowanie papierów wartościowych odbywa się wyłącznie na warunkach i zgodnie z zasadami określonymi w niniejszym memorandum informacyjnym. Memorandum jest jedynym prawnie wiążącym dokumentem zawierającym informacje o papierach wartościowych, ich ofercie i Emitencie.
+
+7. PODSTAWA PRAWNA
+
+Niniejsza oferta publiczna prowadzona jest na podstawie art. 37a ustawy z dnia 29 lipca 2005 r. o ofercie publicznej i warunkach wprowadzania instrumentów finansowych do zorganizowanego systemu obrotu oraz o spółkach publicznych.
+
+8. FIRMA INWESTYCYJNA
+
+[DO UZUPEŁNIENIA - nazwa i siedziba firmy inwestycyjnej pośredniczącej w ofercie]
+
+9. DATA WAŻNOŚCI MEMORANDUM
+
+Data sporządzenia: ${new Date().toLocaleDateString('pl-PL')}
+Memorandum jest ważne przez 12 miesięcy od daty sporządzenia.
+
+10. TRYB INFORMOWANIA O ZMIANACH
+
+Informacje o zmianach danych zawartych w memorandum będą publikowane na stronie internetowej Emitenta: [DO UZUPEŁNIENIA - adres www]
+
+`;
 }
 
 // ============================================
-// SEKCJE STATYCZNE
+// II. CZYNNIKI RYZYKA
 // ============================================
 
-async function* streamResponsiblePersons(company: KRSCompany): AsyncGenerator<string> {
-    yield `III. OSOBY ODPOWIEDZIALNE ZA INFORMACJE ZAWARTE W MEMORANDUM\n\n`;
-    yield `1. EMITENT\n\n`;
-    yield `Za informacje zawarte w niniejszym memorandum informacyjnym odpowiada:\n\n`;
-    yield `${company.nazwa}\n`;
-    yield `${company.siedzibaAdres}\n\n`;
-    yield `Osoby działające w imieniu Emitenta:\n\n`;
-    for (const z of company.reprezentacja || []) {
+async function* generateRisksSection(c: KRSCompany): AsyncGenerator<string> {
+    yield `1. CZYNNIKI RYZYKA ZWIĄZANE Z DZIAŁALNOŚCIĄ EMITENTA
+
+1.1. Ryzyko związane z sytuacją makroekonomiczną
+Działalność ${c.nazwa} jest uzależniona od ogólnej koniunktury gospodarczej. Pogorszenie sytuacji makroekonomicznej może negatywnie wpłynąć na wyniki finansowe Spółki.
+
+1.2. Ryzyko konkurencji
+Spółka działa na konkurencyjnym rynku. Wzrost konkurencji może wpłynąć na marże i udział w rynku.
+
+1.3. Ryzyko kadrowe
+Spółka może napotkać trudności w pozyskaniu i utrzymaniu wykwalifikowanej kadry.
+
+1.4. Ryzyko regulacyjne
+Zmiany w przepisach prawnych mogą wpłynąć na działalność operacyjną Spółki.
+
+2. CZYNNIKI RYZYKA O CHARAKTERZE FINANSOWYM
+
+2.1. Ryzyko płynności
+Spółka może napotkać trudności w regulowaniu bieżących zobowiązań.
+
+2.2. Ryzyko walutowe
+[DO UZUPEŁNIENIA - jeśli dotyczy]
+
+2.3. Ryzyko stopy procentowej
+[DO UZUPEŁNIENIA - jeśli dotyczy]
+
+3. CZYNNIKI RYZYKA ZWIĄZANE Z INSTRUMENTAMI FINANSOWYMI
+
+3.1. Ryzyko związane z nabywaniem akcji
+Inwestowanie w akcje wiąże się z ryzykiem utraty części lub całości zainwestowanego kapitału.
+
+3.2. Ryzyko płynności akcji
+Nie ma gwarancji, że akcje będą przedmiotem aktywnego obrotu.
+
+3.3. Ryzyko niedojścia oferty do skutku
+Oferta może nie dojść do skutku w przypadku nieosiągnięcia progu emisji.
+
+`;
+}
+
+// ============================================
+// III. OSOBY ODPOWIEDZIALNE
+// ============================================
+
+async function* generateResponsibleSection(c: KRSCompany): AsyncGenerator<string> {
+    yield `1. EMITENT
+
+Za informacje zawarte w niniejszym memorandum informacyjnym odpowiada:
+
+${c.nazwa}
+${c.siedzibaAdres}
+
+Osoby działające w imieniu Emitenta:
+`;
+    for (const z of c.reprezentacja || []) {
         yield `- ${z.imie} ${z.nazwisko} - ${z.funkcja}\n`;
     }
-    yield `\nOŚWIADCZENIE EMITENTA:\n`;
-    yield `"Zgodnie z moją najlepszą wiedzą i przy dołożeniu należytej staranności, informacje zawarte w memorandum są prawdziwe, rzetelne i zgodne ze stanem faktycznym, a memorandum nie pomija niczego, co mogłoby wpływać na jego znaczenie."\n\n`;
-    yield `2. FIRMA INWESTYCYJNA\n\n`;
-    yield `[DO UZUPEŁNIENIA - dane firmy inwestycyjnej pośredniczącej w ofercie papierów wartościowych]\n`;
-}
+    yield `
+OŚWIADCZENIE EMITENTA:
+"Zgodnie z moją najlepszą wiedzą i przy dołożeniu należytej staranności, informacje zawarte w memorandum są prawdziwe, rzetelne i zgodne ze stanem faktycznym, a memorandum nie pomija niczego, co mogłoby wpływać na jego znaczenie."
 
-async function* streamAttachments(): AsyncGenerator<string> {
-    yield `VII. ZAŁĄCZNIKI\n\n`;
-    yield `1. ODPIS Z KRAJOWEGO REJESTRU SĄDOWEGO\n`;
-    yield `   Aktualny odpis z KRS stanowi załącznik do niniejszego memorandum.\n\n`;
-    yield `2. STATUT\n`;
-    yield `   Aktualny tekst jednolity statutu Spółki stanowi załącznik do niniejszego memorandum.\n\n`;
-    yield `3. TREŚĆ PODJĘTYCH UCHWAŁ WALNEGO ZGROMADZENIA\n`;
-    yield `   Treść uchwał WZA dotyczących emisji akcji oraz zmian statutu stanowi załącznik.\n\n`;
-    yield `4. WZÓR FORMULARZA ZAPISU NA AKCJE\n`;
-    yield `   Wzór formularza zapisu stanowi załącznik do niniejszego memorandum.\n\n`;
-    yield `5. WZÓR OŚWIADCZENIA O WYCOFANIU ZGODY ZAPISU NA AKCJE\n`;
-    yield `   Wzór oświadczenia stanowi załącznik do niniejszego memorandum.\n\n`;
-    yield `6. DEFINICJE I OBJAŚNIENIA SKRÓTÓW\n\n`;
-    yield `   KRS - Krajowy Rejestr Sądowy\n`;
-    yield `   KSH - Kodeks Spółek Handlowych\n`;
-    yield `   NIP - Numer Identyfikacji Podatkowej\n`;
-    yield `   REGON - Rejestr Gospodarki Narodowej\n`;
-    yield `   PKD - Polska Klasyfikacja Działalności\n`;
-    yield `   WZA - Walne Zgromadzenie Akcjonariuszy\n`;
-    yield `   PLN - Polski Złoty\n`;
-    yield `   ASO - Alternatywny System Obrotu\n`;
-    yield `   NewConnect - rynek NewConnect prowadzony przez GPW w Warszawie S.A.\n`;
-    yield `   GPW - Giełda Papierów Wartościowych w Warszawie S.A.\n`;
-    yield `   KNF - Komisja Nadzoru Finansowego\n`;
-    yield `   KDPW - Krajowy Depozyt Papierów Wartościowych S.A.\n`;
+2. FIRMA INWESTYCYJNA
+
+[DO UZUPEŁNIENIA - dane firmy inwestycyjnej pośredniczącej w ofercie papierów wartościowych]
+
+`;
 }
 
 // ============================================
-// TABELKA FINANSOWA
+// IV. DANE O OFERCIE
+// ============================================
+
+async function* generateOfferSection(c: KRSCompany): AsyncGenerator<string> {
+    yield `1. SZCZEGÓŁOWE OKREŚLENIE PAPIERÓW WARTOŚCIOWYCH
+
+Przedmiotem oferty są akcje zwykłe na okaziciela serii [_] spółki ${c.nazwa}.
+Liczba oferowanych akcji: [DO UZUPEŁNIENIA]
+Wartość nominalna jednej akcji: [DO UZUPEŁNIENIA] PLN
+Łączna wartość nominalna: [DO UZUPEŁNIENIA] PLN
+
+Akcje nie są uprzywilejowane.
+
+2. CELE EMISJI
+
+Środki pozyskane z emisji zostaną przeznaczone na:
+- [DO UZUPEŁNIENIA]
+
+3. KOSZTY EMISJI
+
+Szacunkowe koszty emisji: [DO UZUPEŁNIENIA] PLN
+w tym:
+- koszty przygotowania memorandum: [DO UZUPEŁNIENIA] PLN
+- koszty doradztwa prawnego: [DO UZUPEŁNIENIA] PLN
+- inne koszty: [DO UZUPEŁNIENIA] PLN
+
+4. PODSTAWA PRAWNA EMISJI
+
+Akcje emitowane są na podstawie uchwały [DO UZUPEŁNIENIA - numer i data uchwały] Walnego Zgromadzenia Akcjonariuszy ${c.nazwa}.
+
+5. PRAWO PIERWSZEŃSTWA
+
+[DO UZUPEŁNIENIA - czy akcjonariusze mają prawo pierwszeństwa]
+
+6. UCZESTNICTWO W DYWIDENDZIE
+
+Akcje serii [_] uczestniczą w dywidendzie od dnia [DO UZUPEŁNIENIA].
+
+7. PRAWA Z AKCJI
+
+Akcjonariuszom przysługują następujące prawa:
+- prawo do dywidendy
+- prawo głosu na Walnym Zgromadzeniu
+- prawo poboru akcji nowej emisji
+- prawo do udziału w masie likwidacyjnej
+
+8. POLITYKA DYWIDENDOWA
+
+[DO UZUPEŁNIENIA - opis polityki dywidendowej]
+
+9. OPODATKOWANIE
+
+Dochody z tytułu dywidendy oraz zbycia akcji podlegają opodatkowaniu zgodnie z obowiązującymi przepisami prawa.
+
+10. UMOWY O GWARANCJĘ EMISJI
+
+[DO UZUPEŁNIENIA - lub: Emitent nie zawarł umów o gwarancję emisji]
+
+11. ZASADY DYSTRYBUCJI
+
+Terminy oferty: [DO UZUPEŁNIENIA]
+Miejsce składania zapisów: [DO UZUPEŁNIENIA]
+Minimalna liczba akcji w zapisie: [DO UZUPEŁNIENIA]
+Wpłaty: [DO UZUPEŁNIENIA]
+
+`;
+}
+
+// ============================================
+// V. DANE O EMITENCIE
+// ============================================
+
+async function* generateIssuerSection(c: KRSCompany): AsyncGenerator<string> {
+    yield `1. PODSTAWOWE DANE O EMITENCIE
+
+Firma: ${c.nazwa}
+Forma prawna: ${c.formaOrganizacyjna}
+Siedziba: ${c.siedzibaAdres}
+KRS: ${c.krs}
+NIP: ${c.nip}
+REGON: ${c.regon}
+Kapitał zakładowy: ${c.kapitalZakladowy?.toLocaleString('pl-PL')} PLN (wpłacony w całości)
+
+2. CZAS TRWANIA EMITENTA
+
+Spółka została utworzona na czas nieoznaczony.
+
+3. PRZEPISY PRAWA
+
+Spółka została utworzona i działa na podstawie przepisów prawa polskiego, w szczególności Kodeksu spółek handlowych.
+
+4. SĄD REJESTROWY
+
+Sąd Rejonowy [DO UZUPEŁNIENIA], [DO UZUPEŁNIENIA] Wydział Gospodarczy KRS
+
+5. HISTORIA EMITENTA
+
+Data powstania: ${c.dataPowstania || '[DO UZUPEŁNIENIA]'}
+[DO UZUPEŁNIENIA - krótki opis historii]
+
+6. KAPITAŁY WŁASNE
+
+Kapitał zakładowy: ${c.kapitalZakladowy?.toLocaleString('pl-PL')} PLN
+Kapitał zapasowy: [DO UZUPEŁNIENIA]
+Kapitał rezerwowy: [DO UZUPEŁNIENIA]
+
+7. NIEOPŁACONA CZĘŚĆ KAPITAŁU
+
+Kapitał zakładowy został opłacony w całości.
+
+8. PRZEWIDYWANE ZMIANY KAPITAŁU
+
+[DO UZUPEŁNIENIA]
+
+9. KAPITAŁ DOCELOWY
+
+[DO UZUPEŁNIENIA - lub: Zarząd nie posiada upoważnienia do podwyższenia kapitału w ramach kapitału docelowego]
+
+10. NOTOWANIA
+
+Akcje Emitenta [nie są / są] notowane na rynku regulowanym ani w alternatywnym systemie obrotu.
+
+11. RATING
+
+Emitent nie posiada ratingu.
+
+12. POWIĄZANIA KAPITAŁOWE
+
+[DO UZUPEŁNIENIA]
+
+13. PRZEDMIOT DZIAŁALNOŚCI
+
+PKD: ${c.pkdPrzewazajace}
+${c.pkd?.map(p => `- ${p.kod}: ${p.opis}`).join('\n') || '[DO UZUPEŁNIENIA]'}
+
+14. GŁÓWNE INWESTYCJE
+
+[DO UZUPEŁNIENIA]
+
+15. POSTĘPOWANIA UPADŁOŚCIOWE/LIKWIDACYJNE
+
+Wobec Emitenta nie toczą się postępowania upadłościowe, układowe ani likwidacyjne.
+
+16. INNE POSTĘPOWANIA
+
+[DO UZUPEŁNIENIA - lub: Brak istotnych postępowań]
+
+17. ZOBOWIĄZANIA EMITENTA
+
+[DO UZUPEŁNIENIA]
+
+18. NIETYPOWE ZDARZENIA
+
+[DO UZUPEŁNIENIA - lub: Brak nietypowych zdarzeń]
+
+19. ZMIANY W SYTUACJI FINANSOWEJ
+
+[DO UZUPEŁNIENIA]
+
+20. PROGNOZA WYNIKÓW
+
+[DO UZUPEŁNIENIA - lub: Emitent nie publikuje prognoz]
+
+21. ZARZĄD I RADA NADZORCZA
+
+ZARZĄD:
+`;
+    for (const z of c.reprezentacja || []) {
+        yield `- ${z.imie} ${z.nazwisko} - ${z.funkcja}\n`;
+    }
+    yield `
+Sposób reprezentacji: ${c.sposobReprezentacji || '[DO UZUPEŁNIENIA]'}
+
+RADA NADZORCZA:
+[DO UZUPEŁNIENIA]
+
+22. STRUKTURA AKCJONARIATU
+
+[DO UZUPEŁNIENIA - tabela z akcjonariuszami]
+
+`;
+}
+
+// ============================================
+// VI. SPRAWOZDANIA FINANSOWE
+// ============================================
+
+async function* generateFinancialSection(c: KRSCompany, fin: FinancialData[]): AsyncGenerator<string> {
+    yield `WYBRANE DANE FINANSOWE (w PLN)\n\n`;
+
+    if (fin.length > 0) {
+        yield formatFinancialTable(fin);
+    } else {
+        yield `[DO UZUPEŁNIENIA - dane finansowe]\n`;
+    }
+
+    yield `
+1. SPRAWOZDANIE ZARZĄDU Z DZIAŁALNOŚCI
+
+[DO UZUPEŁNIENIA - lub załącznik]
+
+2. SPRAWOZDANIE FINANSOWE
+
+[DO UZUPEŁNIENIA - lub załącznik]
+
+3. OPINIA BIEGŁEGO REWIDENTA
+
+[DO UZUPEŁNIENIA - lub załącznik]
+
+4. SPRAWOZDANIE KWARTALNE
+
+[DO UZUPEŁNIENIA - lub załącznik]
+
+`;
+}
+
+// ============================================
+// VII. ZAŁĄCZNIKI
+// ============================================
+
+async function* generateAttachmentsSection(): AsyncGenerator<string> {
+    yield `1. ODPIS Z KRAJOWEGO REJESTRU SĄDOWEGO
+   Aktualny odpis z KRS stanowi załącznik do niniejszego memorandum.
+
+2. STATUT
+   Aktualny tekst jednolity statutu Spółki stanowi załącznik do niniejszego memorandum.
+
+3. TREŚĆ PODJĘTYCH UCHWAŁ WALNEGO ZGROMADZENIA
+   Treść uchwał WZA dotyczących emisji akcji oraz zmian statutu stanowi załącznik.
+
+4. WZÓR FORMULARZA ZAPISU NA AKCJE
+   Wzór formularza zapisu stanowi załącznik do niniejszego memorandum.
+
+5. WZÓR OŚWIADCZENIA O WYCOFANIU ZGODY ZAPISU NA AKCJE
+   Wzór oświadczenia stanowi załącznik do niniejszego memorandum.
+
+6. DEFINICJE I OBJAŚNIENIA SKRÓTÓW
+
+   KRS - Krajowy Rejestr Sądowy
+   KSH - Kodeks Spółek Handlowych
+   NIP - Numer Identyfikacji Podatkowej
+   REGON - Rejestr Gospodarki Narodowej
+   PKD - Polska Klasyfikacja Działalności
+   WZA - Walne Zgromadzenie Akcjonariuszy
+   PLN - Polski Złoty
+   ASO - Alternatywny System Obrotu
+   NewConnect - rynek NewConnect prowadzony przez GPW w Warszawie S.A.
+   GPW - Giełda Papierów Wartościowych w Warszawie S.A.
+   KNF - Komisja Nadzoru Finansowego
+   KDPW - Krajowy Depozyt Papierów Wartościowych S.A.
+
+`;
+}
+
+// ============================================
+// FORMATOWANIE TABELI FINANSOWEJ
 // ============================================
 
 export function formatFinancialTable(financials: FinancialData[]): string {
-    if (!financials.length) return '[BRAK DANYCH FINANSOWYCH]';
+    if (!financials.length) return '[BRAK DANYCH FINANSOWYCH]\n';
 
-    const fmt = (n: number) => n ? n.toLocaleString('pl-PL') : '-';
+    const fmt = (n: number) => n ? n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
     const years = financials.map(f => f.rok.toString());
 
-    let t = '\nWybrane dane finansowe (w PLN):\n\n';
-    t += '┌─────────────────────────┬' + years.map(() => '────────────────┬').join('').slice(0, -1) + '┐\n';
-    t += '│ Pozycja                 │' + years.map(y => ` ${y.padStart(14)} │`).join('') + '\n';
-    t += '├─────────────────────────┼' + years.map(() => '────────────────┼').join('').slice(0, -1) + '┤\n';
+    let t = 'Wybrane dane finansowe (w PLN):\n\n';
+    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
+    t += '| Pozycja                 |' + years.map(y => ` ${y.padStart(14)} |`).join('') + '\n';
+    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
 
     const rows: [string, string[]][] = [
         ['Przychody netto', financials.map(f => fmt(f.przychodyNetto))],
@@ -298,9 +594,9 @@ export function formatFinancialTable(financials: FinancialData[]): string {
     ];
 
     for (const [label, vals] of rows) {
-        t += `│ ${label.padEnd(23)} │` + vals.map(v => ` ${v.padStart(14)} │`).join('') + '\n';
+        t += `| ${label.padEnd(23)} |` + vals.map(v => ` ${v.padStart(14)} |`).join('') + '\n';
     }
 
-    t += '└─────────────────────────┴' + years.map(() => '────────────────┴').join('').slice(0, -1) + '┘\n';
+    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
     return t;
 }
