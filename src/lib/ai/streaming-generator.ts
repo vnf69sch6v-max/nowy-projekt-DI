@@ -1,11 +1,13 @@
 /**
  * Streaming Memorandum Generator - Firebase Vertex AI
- * Każda sekcja generowana przez AI krok po kroku
+ * Pełna zgodność z Dz.U. 2020.1053
+ * Weryfikacja AI + zakaz ASCII tabel
  */
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
 import { KRSCompany, FinancialData } from '@/types';
+import { verifyContent, VerificationResult } from './content-verifier';
 
 // Firebase config
 const firebaseConfig = {
@@ -18,14 +20,12 @@ const firebaseConfig = {
 };
 
 function getFirebaseApp() {
-    if (getApps().length === 0) {
-        return initializeApp(firebaseConfig);
-    }
+    if (getApps().length === 0) return initializeApp(firebaseConfig);
     return getApp();
 }
 
 // ============================================
-// STRUKTURA MEMORANDUM
+// STRUKTURA MEMORANDUM (Dz.U. 2020.1053)
 // ============================================
 
 export interface SectionConfig {
@@ -43,11 +43,16 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         paragraph: 'I',
         requiresAI: true,
         subsections: [
-            'Spółka, której akcje są przedmiotem oferty publicznej',
-            'Liczba, rodzaj i wartość nominalna papierów wartościowych',
-            'Cena emisyjna lub sposób jej ustalenia',
-            'Podstawa prawna oferty publicznej',
-            'Data ważności memorandum',
+            '§1. Emitent - podstawowe dane',
+            '§2. Sprzedający (jeśli inny niż emitent)',
+            '§3. Liczba, rodzaj, jednostkowa wartość nominalna akcji',
+            '§4. Podmiot udzielający zabezpieczenia/gwarancji',
+            '§5. Cena emisyjna lub sposób jej ustalenia',
+            '§6. Oświadczenie o warunkach oferty',
+            '§7. Podstawa prawna oferty publicznej',
+            '§8. Firma inwestycyjna pośrednicząca',
+            '§9. Data ważności memorandum',
+            '§10. Tryb informowania o zmianach',
         ],
     },
     {
@@ -56,17 +61,20 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         paragraph: 'II',
         requiresAI: true,
         subsections: [
-            'Ryzyka związane z działalnością emitenta',
-            'Ryzyka finansowe',
-            'Ryzyka związane z papierami wartościowymi',
+            '§11. Ryzyka związane z działalnością i branżą emitenta',
+            '§12. Ryzyka o charakterze finansowym',
+            '§13. Ryzyka związane z instrumentami finansowymi',
         ],
     },
     {
         id: 'responsible',
-        title: 'OSOBY ODPOWIEDZIALNE',
+        title: 'OSOBY ODPOWIEDZIALNE ZA INFORMACJE ZAWARTE W MEMORANDUM',
         paragraph: 'III',
         requiresAI: false,
-        subsections: ['Emitent', 'Oświadczenie'],
+        subsections: [
+            '§14. Emitent - dane i oświadczenie',
+            '§15. Firma inwestycyjna - dane i oświadczenie',
+        ],
     },
     {
         id: 'offer',
@@ -74,10 +82,17 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         paragraph: 'IV',
         requiresAI: true,
         subsections: [
-            'Szczegóły oferowanych papierów wartościowych',
-            'Cele emisji',
-            'Koszty emisji',
-            'Zasady dystrybucji',
+            '§16. Szczegółowe określenie rodzajów, liczby i wartości papierów',
+            '§17. Cele emisji',
+            '§18. Łączne koszty emisji',
+            '§19. Podstawa prawna emisji (uchwała WZA)',
+            '§20. Prawo pierwszeństwa objęcia akcji',
+            '§21. Data uczestnictwa w dywidendzie',
+            '§22. Prawa z oferowanych papierów wartościowych',
+            '§23. Polityka dywidendowa emitenta',
+            '§24. Zasady opodatkowania dochodów',
+            '§25. Umowy o gwarancję emisji',
+            '§26. Zasady dystrybucji oferowanych akcji',
         ],
     },
     {
@@ -86,21 +101,40 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         paragraph: 'V',
         requiresAI: true,
         subsections: [
-            'Podstawowe dane rejestrowe',
-            'Historia i działalność',
-            'Kapitały własne',
-            'Zarząd i rada nadzorcza',
-            'Struktura akcjonariatu',
+            '§27. Podstawowe dane rejestrowe',
+            '§28. Czas trwania emitenta',
+            '§29. Przepisy prawa tworzące emitenta',
+            '§30. Sąd rejestrowy',
+            '§31. Historia emitenta',
+            '§32. Rodzaje i wartość kapitałów własnych',
+            '§33. Nieopłacona część kapitału zakładowego',
+            '§34. Przewidywane zmiany kapitału',
+            '§35. Kapitał docelowy',
+            '§36. Notowania papierów wartościowych',
+            '§37. Rating emitenta',
+            '§38. Powiązania organizacyjne i kapitałowe',
+            '§39. Produkty, towary, usługi emitenta',
+            '§40. Główne inwestycje',
+            '§41. Postępowania upadłościowe/likwidacyjne',
+            '§42. Inne postępowania',
+            '§43. Zobowiązania emitenta',
+            '§44. Nietypowe zdarzenia',
+            '§45. Zmiany w sytuacji finansowej',
+            '§46. Prognoza wyników finansowych',
+            '§47. Osoby zarządzające i nadzorujące',
+            '§48. Struktura akcjonariatu',
         ],
     },
     {
         id: 'financial',
-        title: 'SPRAWOZDANIA FINANSOWE',
+        title: 'SPRAWOZDANIA FINANSOWE EMITENTA',
         paragraph: 'VI',
         requiresAI: true,
         subsections: [
-            'Wybrane dane finansowe',
-            'Analiza sytuacji finansowej',
+            '§49. Sprawozdanie zarządu z działalności',
+            '§50. Sprawozdanie finansowe',
+            '§51. Opinia biegłego rewidenta',
+            '§52. Skrócone sprawozdanie kwartalne',
         ],
     },
     {
@@ -108,7 +142,14 @@ export const MEMORANDUM_SECTIONS: SectionConfig[] = [
         title: 'ZAŁĄCZNIKI',
         paragraph: 'VII',
         requiresAI: false,
-        subsections: ['Lista załączników', 'Definicje'],
+        subsections: [
+            '§53. Odpis z KRS',
+            '§54. Statut',
+            '§55. Uchwały WZA dotyczące emisji',
+            '§56. Wzór formularza zapisu',
+            '§57. Wzór oświadczenia o wycofaniu',
+            '§58. Definicje i objaśnienia skrótów',
+        ],
     },
 ];
 
@@ -120,8 +161,8 @@ export function generateTableOfContents(): string {
     let toc = 'Spis treści\n\n';
     for (const section of MEMORANDUM_SECTIONS) {
         toc += `${section.paragraph}. ${section.title}\n`;
-        for (let i = 0; i < section.subsections.length; i++) {
-            toc += `   ${i + 1}. ${section.subsections[i]}\n`;
+        for (const sub of section.subsections) {
+            toc += `   ${sub}\n`;
         }
         toc += '\n';
     }
@@ -129,7 +170,25 @@ export function generateTableOfContents(): string {
 }
 
 // ============================================
-// STREAMING SEKCJI Z AI
+// FORMATOWANIE REGUŁY (dodawane do każdego promptu)
+// ============================================
+
+const FORMATTING_RULES = `
+FORMATOWANIE - ŚCISŁE ZASADY:
+1. NIE używaj markdown: ##, **, *, \`\`\`
+2. NIE rysuj tabel ASCII z użyciem znaków |, -, +, ═, ─
+3. Dane liczbowe podawaj w formacie: "Przychody za 2025 rok: 12 119 801,76 PLN"
+4. Używaj numeracji: 1., 1.1., 1.1.1.
+5. Daty w formacie: DD.MM.YYYY
+6. Kwoty w formacie: X XXX XXX,XX PLN
+7. Gdzie brak konkretnych danych, wpisz [DO UZUPEŁNIENIA]
+8. Pisz profesjonalnym językiem prawniczym
+9. Powołuj się na przepisy (KSH, ustawa o ofercie publicznej)
+10. Każdy paragraf (§) rozpisuj szczegółowo
+`;
+
+// ============================================
+// STREAMING SEKCJI Z AI + WERYFIKACJA
 // ============================================
 
 export async function* streamMemorandumSection(
@@ -143,7 +202,7 @@ export async function* streamMemorandumSection(
         return;
     }
 
-    // Sekcje statyczne
+    // Sekcje statyczne (bez AI)
     if (!section.requiresAI) {
         if (sectionId === 'responsible') {
             yield* generateResponsibleSection(company);
@@ -165,12 +224,31 @@ export async function* streamMemorandumSection(
 
         console.log(`🤖 Generating section ${sectionId} with AI...`);
 
+        // Generowanie treści
+        let generatedContent = '';
         const result = await model.generateContentStream(prompt);
 
         for await (const chunk of result.stream) {
             const text = chunk.text();
-            if (text) yield text;
+            if (text) {
+                generatedContent += text;
+                yield text;
+            }
         }
+
+        // Weryfikacja treści
+        console.log(`🔍 Verifying section ${sectionId}...`);
+        const verification = await verifyContent(generatedContent, section.title, company, financials);
+
+        if (!verification.verified && verification.correctedText) {
+            yield `\n\n[UWAGA: Wykryto nieścisłości - treść poprawiona automatycznie]\n`;
+            yield verification.correctedText;
+        }
+
+        if (verification.warnings.length > 0) {
+            yield `\n\n[Ostrzeżenia weryfikacji: ${verification.warnings.join('; ')}]\n`;
+        }
+
     } catch (error) {
         console.error(`Section ${sectionId} error:`, error);
         yield `\n[BŁĄD GENEROWANIA: ${error instanceof Error ? error.message : 'nieznany'}]\n`;
@@ -178,7 +256,7 @@ export async function* streamMemorandumSection(
 }
 
 // ============================================
-// PROMPTY DLA SEKCJI
+// PROMPTY DLA SEKCJI (pełna zgodność z rozporządzeniem)
 // ============================================
 
 function generateSectionPrompt(
@@ -188,109 +266,165 @@ function generateSectionPrompt(
     financials: FinancialData[]
 ): string {
     const companyData = `
-DANE SPÓŁKI:
-- Nazwa: ${company.nazwa}
-- KRS: ${company.krs}
+DANE SPÓŁKI (z odpisu KRS):
+- Pełna nazwa: ${company.nazwa}
+- Numer KRS: ${company.krs}
 - NIP: ${company.nip}
 - REGON: ${company.regon}
 - Forma prawna: ${company.formaOrganizacyjna}
-- Adres: ${company.siedzibaAdres}
-- Kapitał zakładowy: ${company.kapitalZakladowy?.toLocaleString('pl-PL')} PLN
-- PKD: ${company.pkdPrzewazajace}
-- Zarząd: ${company.reprezentacja?.map(z => `${z.imie} ${z.nazwisko} (${z.funkcja})`).join(', ')}
+- Siedziba i adres: ${company.siedzibaAdres}
+- Kapitał zakładowy: ${company.kapitalZakladowy?.toLocaleString('pl-PL')} PLN (wpłacony w całości)
+- PKD przeważające: ${company.pkdPrzewazajace}
+- Zarząd: ${company.reprezentacja?.map(z => `${z.imie} ${z.nazwisko} - ${z.funkcja}`).join('; ')}
 - Sposób reprezentacji: ${company.sposobReprezentacji}
 `;
 
     const finData = financials.length > 0
-        ? `\nDANE FINANSOWE:\n${financials.map(f =>
-            `Rok ${f.rok}: Przychody ${f.przychodyNetto?.toLocaleString('pl-PL')} PLN, ` +
-            `Zysk netto ${f.zyskNetto?.toLocaleString('pl-PL')} PLN, ` +
-            `Suma bilansowa ${f.sumaBilansowa?.toLocaleString('pl-PL')} PLN, ` +
-            `Kapitał własny ${f.kapitalWlasny?.toLocaleString('pl-PL')} PLN, ` +
-            `Zobowiązania ${f.zobowiazania?.toLocaleString('pl-PL')} PLN`
-        ).join('\n')}`
-        : '';
+        ? `
+DANE FINANSOWE (z dokumentów):
+${financials.map(f => `
+Rok ${f.rok}:
+- Przychody netto ze sprzedaży: ${f.przychodyNetto?.toLocaleString('pl-PL')} PLN
+- Zysk (strata) netto: ${f.zyskNetto?.toLocaleString('pl-PL')} PLN
+- Suma bilansowa: ${f.sumaBilansowa?.toLocaleString('pl-PL')} PLN
+- Kapitał własny: ${f.kapitalWlasny?.toLocaleString('pl-PL')} PLN
+- Zobowiązania ogółem: ${f.zobowiazania?.toLocaleString('pl-PL')} PLN`).join('')}`
+        : '\nDANE FINANSOWE: [DO UZUPEŁNIENIA - nie dostarczono sprawozdań]\n';
 
-    const subsectionsText = section.subsections.map((s, i) => `${i + 1}. ${s}`).join('\n');
+    const subsectionsText = section.subsections.map(s => s).join('\n');
 
     const sectionPrompts: Record<string, string> = {
-        intro: `Napisz szczegółowy rozdział WSTĘP memorandum informacyjnego dla spółki akcyjnej.
+        intro: `Napisz rozdział I. WSTĘP memorandum informacyjnego zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
 
-WYMAGANE PODSEKCJE:
+WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
 ${subsectionsText}
 
-ZASADY:
-- Pisz profesjonalnym językiem prawniczym, formalnym
-- Podaj dokładne dane spółki (nazwa, KRS, NIP, adres)
-- Opisz przedmiot oferty publicznej
-- Powołaj się na art. 37a ustawy o ofercie publicznej
-- Gdzie brak konkretnych danych o emisji, wpisz [DO UZUPEŁNIENIA]
-- Format: czyste numerowane sekcje, bez markdown`,
+${FORMATTING_RULES}
 
-        risks: `Napisz szczegółowy rozdział CZYNNIKI RYZYKA memorandum informacyjnego.
+SZCZEGÓŁOWE WYMAGANIA:
+- §1: Podaj pełne dane emitenta (nazwa, KRS, NIP, REGON, adres, kapitał)
+- §2: Jeśli sprzedającym jest emitent, napisz "Sprzedającym jest Emitent"
+- §3: Opisz rodzaj akcji (zwykłe/uprzywilejowane, na okaziciela/imienne), liczbę [DO UZUPEŁNIENIA], wartość nominalną [DO UZUPEŁNIENIA]
+- §4: "Emisja nie jest objęta gwarancją" lub szczegóły gwaranta
+- §5: Cena emisyjna [DO UZUPEŁNIENIA] PLN lub sposób ustalenia (np. book-building)
+- §6: Cytuj: "Oferowanie papierów wartościowych odbywa się wyłącznie na warunkach i zgodnie z zasadami określonymi w niniejszym memorandum informacyjnym."
+- §7: Powołaj się na art. 37a ustawy z dnia 29 lipca 2005 r. o ofercie publicznej
+- §8: Firma inwestycyjna [DO UZUPEŁNIENIA] lub "Oferta bez pośrednictwa firmy inwestycyjnej"
+- §9: Data ważności: 12 miesięcy od daty sporządzenia
+- §10: Informacje o zmianach publikowane na stronie [DO UZUPEŁNIENIA]`,
 
-${companyData}
-${finData}
-
-WYMAGANE KATEGORIE:
-${subsectionsText}
-
-ZASADY:
-- Opisz minimum 3-4 konkretne ryzyka w każdej kategorii
-- Ryzyka operacyjne: konkurencja, kadry, technologia, regulacje branżowe
-- Ryzyka finansowe: płynność, zadłużenie, wahania kursu, stopy procentowe
-- Ryzyka inwestycyjne: brak gwarancji zysku, płynność akcji, rozwodnienie
-- Pisz szczegółowo i profesjonalnie
-- Format: numerowane podsekcje`,
-
-        offer: `Napisz szczegółowy rozdział DANE O OFERCIE AKCJI memorandum informacyjnego.
-
-${companyData}
-
-WYMAGANE PODSEKCJE:
-${subsectionsText}
-
-ZASADY:
-- Opisz rodzaj oferowanych akcji (zwykłe na okaziciela)
-- Gdzie brak danych o liczbie akcji i cenie, wpisz [DO UZUPEŁNIENIA]
-- Opisz typowe cele emisji (rozwój, inwestycje, kapitał obrotowy)
-- Opisz szacunkowe koszty emisji
-- Opisz zasady dystrybucji i terminy
-- Format: profesjonalny, numerowany`,
-
-        issuer: `Napisz szczegółowy rozdział DANE O EMITENCIE memorandum informacyjnego.
+        risks: `Napisz rozdział II. CZYNNIKI RYZYKA zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
 ${finData}
 
-WYMAGANE PODSEKCJE:
+WYMAGANE PARAGRAFY:
 ${subsectionsText}
 
-ZASADY:
-- Podaj wszystkie dane rejestrowe szczegółowo
-- Opisz historię i profil działalności spółki
-- Przedstaw strukturę kapitałów
-- Wymień członków zarządu z funkcjami
-- Gdzie brak danych o akcjonariacie, wpisz [DO UZUPEŁNIENIA]
-- Format: profesjonalny, szczegółowy`,
+${FORMATTING_RULES}
 
-        financial: `Napisz rozdział SPRAWOZDANIA FINANSOWE memorandum informacyjnego.
+SZCZEGÓŁOWE WYMAGANIA:
+- §11 (minimum 5 ryzyk operacyjnych):
+  * Ryzyko konkurencji w branży
+  * Ryzyko utraty kluczowych pracowników
+  * Ryzyko zmian technologicznych
+  * Ryzyko regulacyjne (zmiany przepisów)
+  * Ryzyko uzależnienia od kluczowych klientów/dostawców
+  
+- §12 (minimum 4 ryzyka finansowe):
+  * Ryzyko płynności finansowej
+  * Ryzyko walutowe (jeśli dotyczy)
+  * Ryzyko stopy procentowej
+  * Ryzyko kredytowe
+  
+- §13 (minimum 4 ryzyka inwestycyjne):
+  * Ryzyko zmienności kursu akcji
+  * Ryzyko ograniczonej płynności obrotu
+  * Ryzyko rozwodnienia
+  * Ryzyko niedojścia emisji do skutku
+
+Każde ryzyko opisz w 3-5 zdaniach, wyjaśniając jego naturę i potencjalny wpływ.`,
+
+        offer: `Napisz rozdział IV. DANE O OFERCIE AKCJI zgodnie z Dz.U. 2020.1053.
+
+${companyData}
+
+WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
+${subsectionsText}
+
+${FORMATTING_RULES}
+
+SZCZEGÓŁOWE WYMAGANIA:
+- §16: Rodzaj (akcje zwykłe na okaziciela serii [_]), liczba [DO UZUPEŁNIENIA], wartość nominalna [DO UZUPEŁNIENIA] PLN
+- §17: Cele emisji - rozwój działalności, inwestycje, kapitał obrotowy (rozpisz szczegółowo)
+- §18: Szacunkowe koszty: przygotowanie dokumentacji, doradztwo, opłaty giełdowe
+- §19: Uchwała WZA nr [_] z dnia [_]
+- §20: Czy akcjonariusze mają prawo pierwszeństwa
+- §21: Od kiedy akcje uczestniczą w dywidendzie
+- §22: Prawa majątkowe (dywidenda, udział w masie likwidacyjnej) i korporacyjne (głos na WZA, prawo poboru)
+- §23: Polityka dywidendowa - czy spółka zamierza wypłacać dywidendę
+- §24: Podatek od dywidendy 19%, podatek od zysków kapitałowych 19%
+- §25: Umowy gwarancyjne [DO UZUPEŁNIENIA] lub brak
+- §26: Terminy oferty, miejsce zapisów, minimalna liczba akcji`,
+
+        issuer: `Napisz rozdział V. DANE O EMITENCIE zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
 ${finData}
 
-WYMAGANE ELEMENTY:
+WYMAGANE PARAGRAFY (rozpisz każdy):
 ${subsectionsText}
 
-ZASADY:
-- Przedstaw dane finansowe w formie tabeli
-- Skomentuj tendencje (wzrost/spadek przychodów, zysków)
-- Oceń płynność i wypłacalność na podstawie danych
-- Wskaż mocne strony finansowe
-- Wskaż potencjalne zagrożenia
-- Format: tabela + analiza opisowa`,
+${FORMATTING_RULES}
+
+SZCZEGÓŁOWE WYMAGANIA:
+- §27: Pełne dane rejestrowe (wszystkie z KRS)
+- §28: "Spółka została utworzona na czas nieoznaczony"
+- §29: Kodeks spółek handlowych, ustawa o ofercie publicznej
+- §30: Sąd Rejonowy [DO UZUPEŁNIENIA], Wydział Gospodarczy KRS
+- §31: Data powstania, kluczowe wydarzenia, rozwój działalności
+- §32: Kapitał zakładowy, kapitał zapasowy, kapitały rezerwowe
+- §33: Czy całość kapitału została opłacona
+- §34: Planowane podwyższenia kapitału
+- §35: Upoważnienie zarządu do emisji w ramach kapitału docelowego
+- §36: Na jakich rynkach są/były notowane akcje
+- §37: Czy spółka posiada rating
+- §38: Spółki zależne, dominujące, powiązane
+- §39: Główne produkty/usługi, udział w rynku
+- §40: Znaczące inwestycje
+- §41-42: Postępowania sądowe, administracyjne
+- §43: Główne zobowiązania
+- §44: Nietypowe zdarzenia mające wpływ na wyniki
+- §45: Istotne zmiany w ostatnim okresie
+- §46: Prognozy (jeśli publikowane)
+- §47: Imiona, nazwiska, funkcje członków zarządu i RN
+- §48: Akcjonariusze powyżej 5% głosów`,
+
+        financial: `Napisz rozdział VI. SPRAWOZDANIA FINANSOWE zgodnie z Dz.U. 2020.1053.
+
+${companyData}
+${finData}
+
+WYMAGANE PARAGRAFY:
+${subsectionsText}
+
+${FORMATTING_RULES}
+
+SZCZEGÓŁOWE WYMAGANIA:
+- §49: Omów sytuację finansową: przychody, rentowność, płynność, zadłużenie
+- §50: Podsumuj kluczowe pozycje bilansu i rachunku zysków i strat
+- §51: Status opinii biegłego rewidenta [DO UZUPEŁNIENIA]
+- §52: Wyniki za ostatni kwartał [DO UZUPEŁNIENIA]
+
+ANALIZA FINANSOWA (opisz słownie, NIE rysuj tabel):
+- Dynamika przychodów rok do roku
+- Rentowność (zysk/przychody)
+- Wskaźnik płynności (aktywa obrotowe/zobowiązania krótkoterminowe)
+- Wskaźnik zadłużenia (zobowiązania/suma bilansowa)
+
+NIE UŻYWAJ TABEL ASCII - tabela finansowa zostanie wygenerowana osobno.`,
     };
 
     return sectionPrompts[sectionId] || `Napisz sekcję ${section.title} memorandum.\n${companyData}`;
@@ -301,7 +435,7 @@ ZASADY:
 // ============================================
 
 async function* generateResponsibleSection(c: KRSCompany): AsyncGenerator<string> {
-    yield `1. EMITENT
+    yield `§14. EMITENT
 
 Za informacje zawarte w niniejszym memorandum informacyjnym odpowiada:
 
@@ -315,44 +449,67 @@ Osoby działające w imieniu Emitenta:
         yield `- ${z.imie} ${z.nazwisko} - ${z.funkcja}\n`;
     }
     yield `
-2. OŚWIADCZENIE EMITENTA
+OŚWIADCZENIE EMITENTA:
 
-"Zgodnie z naszą najlepszą wiedzą i przy dołożeniu należytej staranności, 
-informacje zawarte w memorandum są prawdziwe, rzetelne i zgodne ze stanem 
-faktycznym, a memorandum nie pomija niczego, co mogłoby wpływać na jego znaczenie."
+"Oświadczamy, że zgodnie z naszą najlepszą wiedzą i przy dołożeniu należytej staranności, informacje zawarte w memorandum są prawdziwe, rzetelne i zgodne ze stanem faktycznym, oraz że memorandum nie pomija niczego, co mogłoby wpływać na jego znaczenie."
+
+Miejscowość, data: [DO UZUPEŁNIENIA]
 
 Podpisy osób odpowiedzialnych:
 `;
     for (const z of c.reprezentacja || []) {
-        yield `\n___________________________\n${z.imie} ${z.nazwisko}\n${z.funkcja}\n`;
+        yield `\n________________________\n${z.imie} ${z.nazwisko}\n${z.funkcja}\n`;
     }
+    yield `
+§15. FIRMA INWESTYCYJNA
+
+[DO UZUPEŁNIENIA - dane firmy inwestycyjnej pośredniczącej w ofercie, jeśli dotyczy]
+
+`;
 }
 
 async function* generateAttachmentsSection(): AsyncGenerator<string> {
-    yield `1. LISTA ZAŁĄCZNIKÓW
+    yield `§53. ODPIS Z KRAJOWEGO REJESTRU SĄDOWEGO
 
-Do niniejszego memorandum informacyjnego załączono:
+Aktualny odpis z KRS stanowi załącznik nr 1 do niniejszego memorandum.
 
-1.1. Odpis aktualny z Krajowego Rejestru Sądowego
-1.2. Tekst jednolity statutu Spółki
-1.3. Uchwały Walnego Zgromadzenia dotyczące emisji akcji
-1.4. Wzór formularza zapisu na akcje
-1.5. Wzór oświadczenia o odstąpieniu od zapisu
+§54. STATUT
 
-2. DEFINICJE I SKRÓTY
+Aktualny tekst jednolity statutu Spółki stanowi załącznik nr 2.
 
+§55. UCHWAŁY WALNEGO ZGROMADZENIA
+
+Treść uchwał WZA dotyczących emisji akcji stanowi załącznik nr 3.
+
+§56. WZÓR FORMULARZA ZAPISU NA AKCJE
+
+Wzór formularza zapisu stanowi załącznik nr 4.
+
+§57. WZÓR OŚWIADCZENIA O WYCOFANIU ZGODY
+
+Wzór oświadczenia o odstąpieniu od zapisu stanowi załącznik nr 5.
+
+§58. DEFINICJE I OBJAŚNIENIA SKRÓTÓW
+
+Akcje - akcje zwykłe na okaziciela emitowane przez Spółkę
 ASO - Alternatywny System Obrotu
+Emitent, Spółka - ${'{nazwa spółki}'} S.A.
 GPW - Giełda Papierów Wartościowych w Warszawie S.A.
 KDPW - Krajowy Depozyt Papierów Wartościowych S.A.
 KNF - Komisja Nadzoru Finansowego
 KRS - Krajowy Rejestr Sądowy
-KSH - Kodeks Spółek Handlowych
+KSH - Kodeks spółek handlowych
+Memorandum - niniejsze memorandum informacyjne
 NewConnect - rynek NewConnect prowadzony przez GPW
 NIP - Numer Identyfikacji Podatkowej
+Oferta - publiczna oferta Akcji
 PKD - Polska Klasyfikacja Działalności
-PLN - Polski Złoty
-REGON - Rejestr Gospodarki Narodowej
+PLN - złoty polski
+REGON - Krajowy Rejestr Urzędowy Podmiotów Gospodarki Narodowej
+RN - Rada Nadzorcza
+Ustawa o ofercie - ustawa z dnia 29 lipca 2005 r. o ofercie publicznej
 WZA - Walne Zgromadzenie Akcjonariuszy
+Zarząd - Zarząd Spółki
 `;
 }
 
@@ -363,26 +520,17 @@ WZA - Walne Zgromadzenie Akcjonariuszy
 export function formatFinancialTable(financials: FinancialData[]): string {
     if (!financials.length) return '[BRAK DANYCH FINANSOWYCH]\n';
 
-    const fmt = (n: number) => n ? n.toLocaleString('pl-PL', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : '-';
-    const years = financials.map(f => f.rok.toString());
+    // Zwróć dane w formacie tekstowym (tabela graficzna generowana w PDF)
+    let result = 'Wybrane dane finansowe (szczegółowa tabela w dokumencie PDF):\n\n';
 
-    let t = 'Wybrane dane finansowe (w PLN):\n\n';
-    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
-    t += '| Pozycja                 |' + years.map(y => ` ${y.padStart(14)} |`).join('') + '\n';
-    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
-
-    const rows: [string, string[]][] = [
-        ['Przychody netto', financials.map(f => fmt(f.przychodyNetto))],
-        ['Zysk (strata) netto', financials.map(f => fmt(f.zyskNetto))],
-        ['Suma bilansowa', financials.map(f => fmt(f.sumaBilansowa))],
-        ['Kapitał własny', financials.map(f => fmt(f.kapitalWlasny))],
-        ['Zobowiązania', financials.map(f => fmt(f.zobowiazania))],
-    ];
-
-    for (const [label, vals] of rows) {
-        t += `| ${label.padEnd(23)} |` + vals.map(v => ` ${v.padStart(14)} |`).join('') + '\n';
+    for (const f of financials) {
+        result += `Rok ${f.rok}:\n`;
+        result += `  Przychody netto: ${f.przychodyNetto?.toLocaleString('pl-PL')} PLN\n`;
+        result += `  Zysk netto: ${f.zyskNetto?.toLocaleString('pl-PL')} PLN\n`;
+        result += `  Suma bilansowa: ${f.sumaBilansowa?.toLocaleString('pl-PL')} PLN\n`;
+        result += `  Kapitał własny: ${f.kapitalWlasny?.toLocaleString('pl-PL')} PLN\n`;
+        result += `  Zobowiązania: ${f.zobowiazania?.toLocaleString('pl-PL')} PLN\n\n`;
     }
 
-    t += '+-------------------------+' + years.map(() => '----------------+').join('') + '\n';
-    return t;
+    return result;
 }
