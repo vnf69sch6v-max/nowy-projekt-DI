@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { analyzeKRSDocument, analyzeFinancialDocument } from '@/lib/ai/document-analyzer';
+import { analyzeKRSDocument, analyzeFinancialDocument, analyzeOfferDocument } from '@/lib/ai/document-analyzer';
 import {
     MEMORANDUM_SECTIONS,
     generateTableOfContents,
@@ -7,7 +7,7 @@ import {
     formatFinancialTable
 } from '@/lib/ai/streaming-generator';
 import { generateMockFinancials } from '@/lib/financials/mock';
-import { KRSCompany, FinancialData } from '@/types';
+import { KRSCompany, FinancialData, OfferDocumentData } from '@/types';
 
 export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
                 const formData = await request.formData();
                 const krsFile = formData.get('krs') as File | null;
                 const financialFile = formData.get('financial') as File | null;
+                const offerFile = formData.get('offer') as File | null;
                 const offerParamsStr = formData.get('offerParams') as string | null;
                 const offerParams = offerParamsStr ? JSON.parse(offerParamsStr) : null;
 
@@ -60,6 +61,24 @@ export async function POST(request: NextRequest) {
                 } else {
                     financials = generateMockFinancials(companyData.nazwa || 'Spółka');
                 }
+
+                // Analiza dokumentu oferty (jeśli wgrano)
+                let offerData: OfferDocumentData | null = null;
+                if (offerFile) {
+                    try {
+                        const offerBuffer = Buffer.from(await offerFile.arrayBuffer());
+                        offerData = await analyzeOfferDocument(offerBuffer);
+                        send({ type: 'status', section: 'analysis', message: `Wyekstrahowano parametry oferty` });
+                    } catch (error) {
+                        console.error('Offer analysis error:', error);
+                    }
+                }
+
+                // Merge danych z dokumentu oferty z parametrami z formularza
+                const mergedOfferParams = {
+                    ...offerData,
+                    ...offerParams, // Parametry z formularza nadpisują te z dokumentu
+                };
 
                 // ==========================================
                 // ETAP 2: Nagłówek dokumentu
@@ -126,7 +145,7 @@ export async function POST(request: NextRequest) {
 
                     // Streamuj sekcję
                     try {
-                        for await (const chunk of streamMemorandumSection(section.id, companyData, financials, offerParams)) {
+                        for await (const chunk of streamMemorandumSection(section.id, companyData, financials, mergedOfferParams)) {
                             send({ type: 'content', text: chunk });
                         }
                     } catch (error) {
@@ -173,6 +192,7 @@ ${'═'.repeat(80)}
                     companyName: companyData.nazwa,
                     company: companyData,
                     financials: financials,
+                    offerData: offerData,
                     sections: totalSections
                 });
 

@@ -5,7 +5,7 @@
 
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
-import { KRSCompany, FinancialData } from '@/types';
+import { KRSCompany, FinancialData, OfferDocumentData } from '@/types';
 
 // Firebase config
 const firebaseConfig = {
@@ -198,4 +198,54 @@ async function parseExcelFinancials(buffer: Buffer): Promise<FinancialData[]> {
         }
     }
     return financials;
+}
+
+// Prompt dla dokumentu ofertowego
+const OFFER_PROMPT = `Przeanalizuj ten dokument dotyczący emisji akcji (warunki oferty, uchwała WZA, memorandum).
+Wyekstrahuj parametry oferty i zwróć TYLKO JSON (bez markdown):
+{
+  "seria": "seria akcji np. B, C",
+  "liczba": 100000,
+  "nominalna": 0.10,
+  "cena": 5.00,
+  "cele": "opis celów emisji",
+  "termin": "data rozpoczęcia - data zakończenia",
+  "miejsce": "gdzie składać zapisy",
+  "minLiczba": 100,
+  "firma": "nazwa firmy inwestycyjnej jeśli jest",
+  "uchwala": "numer uchwały WZA",
+  "dataUchwaly": "data uchwały",
+  "gwarancja": "czy jest gwarancja emisji"
+}
+Jeśli jakiejś informacji nie ma w dokumencie, użyj null.`;
+
+/**
+ * Analizuje dokument z parametrami oferty (warunki emisji, uchwała WZA)
+ */
+export async function analyzeOfferDocument(pdfBuffer: Buffer): Promise<OfferDocumentData> {
+    console.log('📋 Analyzing offer document with Firebase Vertex AI...');
+
+    const response = await analyzeWithGemini(pdfBuffer, OFFER_PROMPT);
+
+    try {
+        const d = parseJSON(response) as Record<string, unknown>;
+
+        return {
+            seriaAkcji: d.seria ? String(d.seria) : undefined,
+            liczbaAkcji: d.liczba ? Number(d.liczba) : undefined,
+            wartoscNominalna: d.nominalna ? Number(d.nominalna) : undefined,
+            cenaEmisyjna: d.cena ? Number(d.cena) : undefined,
+            celeEmisji: d.cele ? String(d.cele) : undefined,
+            terminSubskrypcji: d.termin ? String(d.termin) : undefined,
+            miejsceZapisow: d.miejsce ? String(d.miejsce) : undefined,
+            minimalnaLiczbaAkcji: d.minLiczba ? Number(d.minLiczba) : undefined,
+            firmaInwestycyjna: d.firma ? String(d.firma) : undefined,
+            uchwalaWZA: d.uchwala ? String(d.uchwala) : undefined,
+            dataUchwaly: d.dataUchwaly ? String(d.dataUchwaly) : undefined,
+            gwarancjaEmisji: d.gwarancja ? String(d.gwarancja) : undefined,
+        };
+    } catch (error) {
+        console.error('Error parsing offer document:', error);
+        return {};
+    }
 }

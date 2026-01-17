@@ -4,16 +4,18 @@ import { useState, useCallback } from 'react';
 import DocumentUploader from './DocumentUploader';
 import OfferParametersForm, { OfferParameters } from './OfferParametersForm';
 import { Sparkles, Download, Loader2, CheckCircle, AlertCircle, FileText } from 'lucide-react';
-import { KRSCompany, FinancialData } from '@/types';
+import { KRSCompany, FinancialData, OfferDocumentData } from '@/types';
 
 export default function MemorandumGenerator() {
     const [krsFile, setKrsFile] = useState<File | null>(null);
     const [financialFile, setFinancialFile] = useState<File | null>(null);
+    const [offerFile, setOfferFile] = useState<File | null>(null);
     const [offerParams, setOfferParams] = useState<OfferParameters | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedContent, setGeneratedContent] = useState('');
     const [companyData, setCompanyData] = useState<KRSCompany | null>(null);
     const [financialsData, setFinancialsData] = useState<FinancialData[]>([]);
+    const [offerData, setOfferData] = useState<OfferDocumentData | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [isComplete, setIsComplete] = useState(false);
     const [isDownloading, setIsDownloading] = useState(false);
@@ -30,6 +32,9 @@ export default function MemorandumGenerator() {
         formData.append('krs', krsFile);
         if (financialFile) {
             formData.append('financial', financialFile);
+        }
+        if (offerFile) {
+            formData.append('offer', offerFile);
         }
         if (offerParams) {
             formData.append('offerParams', JSON.stringify(offerParams));
@@ -66,6 +71,7 @@ export default function MemorandumGenerator() {
                             if (event.type === 'complete') {
                                 setCompanyData(event.company);
                                 setFinancialsData(event.financials || []);
+                                setOfferData(event.offerData || null);
                                 setIsComplete(true);
                             }
                             if (event.type === 'error') setError(event.message);
@@ -79,10 +85,16 @@ export default function MemorandumGenerator() {
         } finally {
             setIsGenerating(false);
         }
-    }, [krsFile, financialFile, offerParams]);
+    }, [krsFile, financialFile, offerFile, offerParams]);
 
     const handleDownloadPdf = useCallback(async () => {
         if (!companyData || !generatedContent) return;
+
+        // Merge offerParams with offerData (AI-extracted)
+        const mergedOfferParams = {
+            ...offerData,
+            ...offerParams, // User input overrides AI-extracted
+        };
 
         setIsDownloading(true);
         try {
@@ -93,7 +105,7 @@ export default function MemorandumGenerator() {
                     content: generatedContent,
                     company: companyData,
                     financials: financialsData,
-                    offerParams: offerParams,
+                    offerParams: mergedOfferParams,
                 }),
             });
 
@@ -111,7 +123,7 @@ export default function MemorandumGenerator() {
         } finally {
             setIsDownloading(false);
         }
-    }, [generatedContent, companyData, financialsData, offerParams]);
+    }, [generatedContent, companyData, financialsData, offerParams, offerData]);
 
     return (
         <div className="max-w-xl mx-auto">
@@ -137,6 +149,14 @@ export default function MemorandumGenerator() {
                         acceptedTypes={['.pdf', '.xlsx', '.xls']}
                         maxFiles={1}
                         onFilesChange={(files) => setFinancialFile(files[0] || null)}
+                    />
+
+                    <DocumentUploader
+                        label="Warunki oferty / Uchwała WZA"
+                        hint="Opcjonalne - AI wyciągnie parametry emisji (PDF)"
+                        acceptedTypes={['.pdf']}
+                        maxFiles={1}
+                        onFilesChange={(files) => setOfferFile(files[0] || null)}
                     />
 
                     <OfferParametersForm onChange={setOfferParams} />
@@ -170,7 +190,14 @@ export default function MemorandumGenerator() {
                         <div className="space-y-3">
                             <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center gap-3">
                                 <CheckCircle className="w-5 h-5 text-green-400" />
-                                <p className="text-green-300">Memorandum wygenerowane!</p>
+                                <div>
+                                    <p className="text-green-300">Memorandum wygenerowane!</p>
+                                    {offerData && (offerData.seriaAkcji || offerData.liczbaAkcji) && (
+                                        <p className="text-green-300/70 text-xs mt-1">
+                                            ✓ Wyekstrahowano parametry oferty z dokumentu
+                                        </p>
+                                    )}
+                                </div>
                             </div>
 
                             <button

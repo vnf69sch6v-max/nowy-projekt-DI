@@ -80,6 +80,24 @@ export interface FinancialData {
     zatrudnienie?: number;
 }
 
+// Offer Document Data (extracted from offer conditions PDF)
+export interface OfferDocumentData {
+    seriaAkcji?: string;
+    liczbaAkcji?: number;
+    wartoscNominalna?: number;
+    cenaEmisyjna?: number;
+    celeEmisji?: string;
+    terminSubskrypcji?: string;
+    miejsceZapisow?: string;
+    minimalnaLiczbaAkcji?: number;
+    firmaInwestycyjna?: string;
+    dataWaznosci?: string;
+    uchwalaWZA?: string;
+    dataUchwaly?: string;
+    prawoFirstRefusal?: boolean;
+    gwarancjaEmisji?: string;
+}
+
 // Risk Analysis Types
 export interface RiskFactor {
     kategoria: 'finansowe' | 'operacyjne' | 'prawne' | 'rynkowe';
