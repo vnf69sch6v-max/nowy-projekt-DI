@@ -198,19 +198,41 @@ FORMATOWANIE - SCISLE ZASADY:
 6. Gdzie brak danych: [DO UZUPELNIENIA]
 7. Pisz profesjonalnym jezykiem prawniczym
 
-NUMERACJA - SCISLA HIERARCHIA:
-- Glowne sekcje: I., II., III., IV. (rzymskie, bez powtarzania)
-- Podsekcje (paragrafy): §11., §12., §13. (symbol paragrafu)
-- Punkty wewnatrz: 1., 2., 3. (arabskie)
-- Podpunkty: a), b), c) lub 1.1., 1.2., 1.3.
+=== KRYTYCZNE ZASADY NUMERACJI ===
 
-PRZYKLAD PRAWIDLOWEJ STRUKTURY:
+POZIOM 1 - SEKCJA GLOWNA (tylko RAZ na dokument!):
+I., II., III., IV., V., VI., VII.
+
+POZIOM 2 - PARAGRAFY (ciagla numeracja w calym dokumencie):
+§11., §12., §13., §14., ..., §49., §50., §51., §52.
+NIGDY nie resetuj numeracji paragrafow!
+
+POZIOM 3 - PUNKTY WEWNATRZ PARAGRAFU (resetuj w kazdym §):
+1., 2., 3., 4., 5. (resetuje sie w kazdym nowym §)
+
+POZIOM 4 - PODPUNKTY:
+a), b), c) LUB i), ii), iii)
+
+=== PRZYKLAD PRAWIDLOWY ===
+
 II. CZYNNIKI RYZYKA
-§11. Czynniki ryzyka zwiazane z dzialalnoscia emitenta
+
+§11. Ryzyka zwiazane z dzialalnoscia emitenta
 1. Ryzyko konkurencji
-   Opis ryzyka...
+   Opis ryzyka w 3-5 zdaniach...
 2. Ryzyko utraty pracownikow
    Opis ryzyka...
+
+§12. Ryzyka o charakterze finansowym
+1. Ryzyko plynnosci
+   Opis...
+2. Ryzyko walutowe
+   Opis...
+
+=== BLEDY DO UNIKANIA ===
+- NIE uzywaj: "6. Ryzyko..." a potem "1. Ryzyko..." - to chaos!
+- NIE mieszaj poziomow numeracji!
+- NIE powtarzaj numeru sekcji (np. "II." tylko raz!)
 
 NIE ZACZYNAJ OD "Spis tresci" - jest juz wbudowany w PDF!
 `;
