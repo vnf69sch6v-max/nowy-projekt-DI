@@ -67,6 +67,45 @@ function removeDuplicateTOC(text: string): string {
 }
 
 /**
+ * Rysuje wyjustowany tekst (justify) - równomiernie rozkłada słowa
+ */
+function drawJustifiedText(
+    page: PDFPage,
+    text: string,
+    x: number,
+    y: number,
+    width: number,
+    fontSize: number,
+    font: PDFFont,
+    color: { red: number; green: number; blue: number },
+    isLastLine: boolean = false
+): void {
+    const words = text.split(' ').filter(w => w.length > 0);
+
+    // Ostatnia linia akapitu - wyrównaj do lewej
+    if (isLastLine || words.length <= 2) {
+        page.drawText(text, { x, y, size: fontSize, font, color: rgb(color.red, color.green, color.blue) });
+        return;
+    }
+
+    // Oblicz szerokość każdego słowa
+    const wordWidths = words.map(word => font.widthOfTextAtSize(word, fontSize));
+    const totalWordWidth = wordWidths.reduce((a, b) => a + b, 0);
+
+    // Oblicz dodatkową przestrzeń między słowami
+    const totalSpaceWidth = width - totalWordWidth;
+    const spaceCount = words.length - 1;
+    const spaceWidth = spaceCount > 0 ? totalSpaceWidth / spaceCount : 0;
+
+    // Rysuj każde słowo z obliczonym odstępem
+    let currentX = x;
+    for (let i = 0; i < words.length; i++) {
+        page.drawText(words[i], { x: currentX, y, size: fontSize, font, color: rgb(color.red, color.green, color.blue) });
+        currentX += wordWidths[i] + spaceWidth;
+    }
+}
+
+/**
  * Formatuje PLN
  */
 function formatPLN(value: number | null | undefined): string {
@@ -357,18 +396,29 @@ export async function generateProfessionalPDF(
             continue;
         }
 
-        // Zwykły tekst - z wcięciem 15
-        const wrappedLines = wrapText(trimmed, font, 10, CONTENT_WIDTH - 15);
-        for (const wLine of wrappedLines) {
+        // Zwykły tekst - z wcięciem i WYJUSTOWANIEM
+        const textIndent = 20;
+        const textWidth = CONTENT_WIDTH - textIndent;
+        const wrappedLines = wrapText(trimmed, font, 10, textWidth);
+        for (let lineIdx = 0; lineIdx < wrappedLines.length; lineIdx++) {
             if (y < MARGIN + 50) {
                 addPageFooter(currentPage, pageNum, font);
                 currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
                 y = PAGE_HEIGHT - MARGIN;
                 pageNum++;
             }
-            currentPage.drawText(wLine, {
-                x: MARGIN + 15, y, size: 10, font, color: rgb(0.2, 0.2, 0.2)
-            });
+            const isLastLine = lineIdx === wrappedLines.length - 1;
+            drawJustifiedText(
+                currentPage,
+                wrappedLines[lineIdx],
+                MARGIN + textIndent,
+                y,
+                textWidth,
+                10,
+                font,
+                { red: 0.2, green: 0.2, blue: 0.2 },
+                isLastLine
+            );
             y -= 14;
         }
     }
