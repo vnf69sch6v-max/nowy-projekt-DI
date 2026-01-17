@@ -368,6 +368,9 @@ export async function generateProfessionalPDF(
                 sectionIcon = '[i] ';
             }
 
+            // Linia dekoracyjna przed sekcją
+            drawLine(currentPage, MARGIN, y + 15, CONTENT_WIDTH, 1.5, rgb(0.85, 0.85, 0.88));
+
             // Tło dla nagłówka sekcji
             currentPage.drawRectangle({
                 x: MARGIN - 5,
@@ -381,7 +384,7 @@ export async function generateProfessionalPDF(
             currentPage.drawText(sectionIcon + trimmed.toUpperCase(), {
                 x: MARGIN, y, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.2)
             });
-            y -= 25;
+            y -= 30; // Większy odstęp po nagłówku sekcji
             continue;
         }
 
@@ -395,20 +398,48 @@ export async function generateProfessionalPDF(
             continue;
         }
 
+        // Paragraf (§11., §12., etc.) - specjalne formatowanie
+        if (/^§?\d{2,}\.\s/.test(trimmed)) {
+            y -= 18; // Większy odstęp przed paragrafem
+
+            // Lekkie tło dla paragrafu
+            currentPage.drawRectangle({
+                x: MARGIN - 3,
+                y: y - 3,
+                width: CONTENT_WIDTH + 6,
+                height: 18,
+                color: rgb(0.98, 0.98, 1),
+            });
+
+            // Numer paragrafu (§11)
+            const paragraphMatch = trimmed.match(/^(§?\d+\.)\s*(.*)/);
+            if (paragraphMatch) {
+                currentPage.drawText(paragraphMatch[1], {
+                    x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.2, 0.3, 0.5)
+                });
+                currentPage.drawText(paragraphMatch[2], {
+                    x: MARGIN + 35, y, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15)
+                });
+            } else {
+                currentPage.drawText(trimmed, {
+                    x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15)
+                });
+            }
+            y -= 16;
+            continue;
+        }
+
         // Numerowany punkt główny (1., 2., 3., etc.)
         if (/^\d+\.\s/.test(trimmed)) {
-            y -= 12;
-
-            // Linia oddzielająca
-            drawLine(currentPage, MARGIN, y + 8, CONTENT_WIDTH, 0.3, rgb(0.9, 0.9, 0.9));
+            y -= 8;
 
             currentPage.drawText(trimmed.substring(0, 3), {
-                x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.3, 0.3, 0.4)
+                x: MARGIN + 15, y, size: 10, font: fontBold, color: rgb(0.3, 0.3, 0.4)
             });
 
             // Tekst po numerze z wcięciem
             const textAfterNum = trimmed.substring(3);
-            const wrappedMainPoint = wrapText(textAfterNum, font, 10, CONTENT_WIDTH - 25);
+            const wrappedMainPoint = wrapText(textAfterNum, font, 10, CONTENT_WIDTH - 40);
             for (let i = 0; i < wrappedMainPoint.length; i++) {
                 if (y < MARGIN + 50) {
                     addPageFooter(currentPage, pageNum, font);
@@ -417,11 +448,11 @@ export async function generateProfessionalPDF(
                     pageNum++;
                 }
                 currentPage.drawText(wrappedMainPoint[i], {
-                    x: MARGIN + 25, y, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15)
+                    x: MARGIN + 35, y, size: 10, font: i === 0 ? fontBold : font, color: rgb(0.15, 0.15, 0.15)
                 });
                 y -= 14;
             }
-            y -= 4;
+            y -= 2;
             continue;
         }
 
@@ -556,8 +587,12 @@ export async function generateProfessionalPDF(
             currentPage.drawText(row[0], { x: xPos, y, size: 9, font, color: rgb(0.2, 0.2, 0.2) });
             xPos += colWidths[0];
             for (let i = 1; i < row.length; i++) {
-                currentPage.drawText(row[i], { x: xPos, y, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
-                xPos += colWidths[i] || 100;
+                // Wyrównanie liczb do prawej strony kolumny
+                const colWidth = colWidths[i] || 100;
+                const textWidth = font.widthOfTextAtSize(row[i], 9);
+                const rightAlignedX = xPos + colWidth - textWidth - 10;
+                currentPage.drawText(row[i], { x: rightAlignedX, y, size: 9, font, color: rgb(0.15, 0.15, 0.15) });
+                xPos += colWidth;
             }
             y -= 18;
         }
