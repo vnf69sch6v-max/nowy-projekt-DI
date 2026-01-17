@@ -270,19 +270,19 @@ export function calculateRatios(
 
     if (positiveSignals >= 5) {
         ratios.trend = 'strong_positive';
-        ratios.trendDescription = 'Doskonała kondycja finansowa - wszystkie wskaźniki powyżej normy';
+        ratios.trendDescription = 'Doskonala kondycja finansowa - wszystkie wskazniki powyzej normy';
     } else if (positiveSignals >= 3) {
         ratios.trend = 'positive';
         ratios.trendDescription = 'Dobra kondycja finansowa z pozytywnymi trendami';
     } else if (negativeSignals >= 4) {
         ratios.trend = 'strong_negative';
-        ratios.trendDescription = 'Poważne problemy finansowe wymagające natychmiastowej interwencji';
+        ratios.trendDescription = 'Powazne problemy finansowe wymagajace natychmiastowej interwencji';
     } else if (negativeSignals >= 2) {
         ratios.trend = 'negative';
-        ratios.trendDescription = 'Niepokojące sygnały finansowe - konieczna analiza ryzyka';
+        ratios.trendDescription = 'Niepokojace sygnaly finansowe - konieczna analiza ryzyka';
     } else {
         ratios.trend = 'neutral';
-        ratios.trendDescription = 'Stabilna sytuacja finansowa bez wyraźnych trendów';
+        ratios.trendDescription = 'Stabilna sytuacja finansowa bez wyraznych trendow';
     }
 
     return ratios;

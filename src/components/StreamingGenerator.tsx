@@ -388,34 +388,50 @@ export default function MemorandumGenerator() {
                         <div className="h-full">
                             <h3 className="text-white font-medium mb-4 flex items-center gap-2">
                                 <Edit3 className="w-4 h-4" />
-                                Uzupełnij brakujące dane ({editableFields.filter(f => !f.value).length})
+                                Uzupelnij brakujace dane ({editableFields.filter(f => !f.value).length})
                             </h3>
 
                             {editableFields.length === 0 ? (
                                 <div className="text-center text-white/40 py-8">
                                     <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-400" />
-                                    <p>Wszystkie dane zostały uzupełnione!</p>
+                                    <p>Wszystkie dane zostaly uzupelnione!</p>
                                 </div>
                             ) : (
-                                <div className="space-y-3 max-h-[500px] overflow-auto">
-                                    {editableFields.slice(0, 10).map((field) => (
-                                        <div key={field.id} className="bg-white/5 rounded-lg p-3">
-                                            <p className="text-white/50 text-xs mb-2 line-clamp-2">
-                                                ...{field.context.replace(field.placeholder, `**${field.placeholder}**`)}...
-                                            </p>
-                                            <input
-                                                type="text"
-                                                placeholder={field.placeholder}
-                                                value={field.value}
-                                                onChange={(e) => updateField(field.id, e.target.value)}
-                                                className="w-full px-3 py-2 bg-white/5 border border-white/10 rounded-lg text-white text-sm placeholder:text-white/30 focus:outline-none focus:border-pink-500/50"
-                                            />
+                                <div className="space-y-4 max-h-[500px] overflow-auto pr-2">
+                                    {editableFields.slice(0, 15).map((field, idx) => (
+                                        <div key={field.id} className="bg-gradient-to-r from-white/5 to-white/[0.02] rounded-xl p-4 border border-white/10">
+                                            <div className="flex items-start gap-3">
+                                                <div className="flex-shrink-0 w-8 h-8 rounded-full bg-pink-500/20 flex items-center justify-center text-pink-400 text-xs font-bold">
+                                                    {idx + 1}
+                                                </div>
+                                                <div className="flex-1 min-w-0">
+                                                    <p className="text-white/70 text-sm mb-2 leading-relaxed">
+                                                        {field.context.length > 150
+                                                            ? `...${field.context.slice(0, 150)}...`
+                                                            : field.context}
+                                                    </p>
+                                                    <div className="flex items-center gap-2">
+                                                        <input
+                                                            type="text"
+                                                            placeholder={field.placeholder.replace(/[\[\]]/g, '')}
+                                                            value={field.value}
+                                                            onChange={(e) => updateField(field.id, e.target.value)}
+                                                            className="flex-1 px-4 py-2.5 bg-white/10 border border-white/20 rounded-lg text-white placeholder:text-white/40 focus:outline-none focus:border-pink-500 focus:ring-1 focus:ring-pink-500/50 transition-all"
+                                                        />
+                                                        {field.value && (
+                                                            <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     ))}
-                                    {editableFields.length > 10 && (
-                                        <p className="text-white/40 text-xs text-center">
-                                            +{editableFields.length - 10} więcej pól...
-                                        </p>
+                                    {editableFields.length > 15 && (
+                                        <div className="text-center py-3 bg-white/5 rounded-lg">
+                                            <p className="text-white/50 text-sm">
+                                                +{editableFields.length - 15} wiecej pol do uzupelnienia
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
                             )}
