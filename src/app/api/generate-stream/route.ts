@@ -169,6 +169,8 @@ ${'═'.repeat(80)}
                     type: 'complete',
                     message: 'Memorandum zostało wygenerowane!',
                     companyName: companyData.nazwa,
+                    company: companyData,
+                    financials: financials,
                     sections: totalSections
                 });
 

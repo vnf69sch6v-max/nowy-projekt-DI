@@ -3,15 +3,18 @@
 import { useState, useCallback } from 'react';
 import DocumentUploader from './DocumentUploader';
 import { Sparkles, Download, Loader2, CheckCircle, AlertCircle, FileText } from 'lucide-react';
+import { KRSCompany, FinancialData } from '@/types';
 
 export default function MemorandumGenerator() {
     const [krsFile, setKrsFile] = useState<File | null>(null);
     const [financialFile, setFinancialFile] = useState<File | null>(null);
     const [isGenerating, setIsGenerating] = useState(false);
     const [generatedContent, setGeneratedContent] = useState('');
-    const [companyName, setCompanyName] = useState<string | null>(null);
+    const [companyData, setCompanyData] = useState<KRSCompany | null>(null);
+    const [financialsData, setFinancialsData] = useState<FinancialData[]>([]);
     const [error, setError] = useState<string | null>(null);
     const [isComplete, setIsComplete] = useState(false);
+    const [isDownloading, setIsDownloading] = useState(false);
 
     const handleGenerate = useCallback(async () => {
         if (!krsFile) return;
@@ -56,7 +59,8 @@ export default function MemorandumGenerator() {
                             const event = JSON.parse(line.slice(6));
                             if (event.type === 'content') content += event.text || '';
                             if (event.type === 'complete') {
-                                setCompanyName(event.companyName);
+                                setCompanyData(event.company);
+                                setFinancialsData(event.financials || []);
                                 setIsComplete(true);
                             }
                             if (event.type === 'error') setError(event.message);
@@ -73,16 +77,35 @@ export default function MemorandumGenerator() {
     }, [krsFile, financialFile]);
 
     const handleDownloadPdf = useCallback(async () => {
-        const { generateMemorandumPDF } = await import('@/lib/documents/pdf-generator');
-        const pdfBytes = await generateMemorandumPDF(generatedContent, companyName || 'Spółka');
-        const blob = new Blob([new Uint8Array(pdfBytes)], { type: 'application/pdf' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `Memorandum_${companyName?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'}.pdf`;
-        a.click();
-        URL.revokeObjectURL(url);
-    }, [generatedContent, companyName]);
+        if (!companyData || !generatedContent) return;
+
+        setIsDownloading(true);
+        try {
+            const response = await fetch('/api/generate-pdf', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    content: generatedContent,
+                    company: companyData,
+                    financials: financialsData,
+                }),
+            });
+
+            if (!response.ok) throw new Error('PDF generation failed');
+
+            const blob = await response.blob();
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Memorandum_${companyData.nazwa?.replace(/[^a-zA-Z0-9]/g, '_') || 'document'}.pdf`;
+            a.click();
+            URL.revokeObjectURL(url);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Błąd pobierania PDF');
+        } finally {
+            setIsDownloading(false);
+        }
+    }, [generatedContent, companyData, financialsData]);
 
     return (
         <div className="max-w-xl mx-auto">
@@ -98,8 +121,8 @@ export default function MemorandumGenerator() {
                         hint="Wgraj odpis aktualny z KRS (PDF)"
                         acceptedTypes={['.pdf']}
                         maxFiles={1}
-                        onFilesChange={(files) => setKrsFile(files[0] || null)}
                         required
+                        onFilesChange={(files) => setKrsFile(files[0] || null)}
                     />
 
                     <DocumentUploader
@@ -109,18 +132,16 @@ export default function MemorandumGenerator() {
                         maxFiles={1}
                         onFilesChange={(files) => setFinancialFile(files[0] || null)}
                     />
-                </div>
 
-                <div className="mt-6">
                     <button
                         onClick={handleGenerate}
                         disabled={!krsFile || isGenerating}
-                        className="w-full py-3 px-6 bg-gradient-to-r from-purple-500 to-pink-500 text-white font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed hover:from-purple-600 hover:to-pink-600 transition-all flex items-center justify-center gap-2"
+                        className="w-full py-3 px-6 rounded-xl font-medium flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-pink-500 to-orange-400 text-white hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         {isGenerating ? (
                             <>
                                 <Loader2 className="w-5 h-5 animate-spin" />
-                                Generuję...
+                                Generowanie...
                             </>
                         ) : (
                             <>
@@ -129,36 +150,47 @@ export default function MemorandumGenerator() {
                             </>
                         )}
                     </button>
+
+                    {error && (
+                        <div className="p-4 bg-red-500/20 border border-red-500/30 rounded-xl flex items-start gap-3">
+                            <AlertCircle className="w-5 h-5 text-red-400 flex-shrink-0 mt-0.5" />
+                            <p className="text-red-300 text-sm">{error}</p>
+                        </div>
+                    )}
+
+                    {isComplete && (
+                        <div className="space-y-3">
+                            <div className="p-4 bg-green-500/20 border border-green-500/30 rounded-xl flex items-center gap-3">
+                                <CheckCircle className="w-5 h-5 text-green-400" />
+                                <p className="text-green-300">Memorandum wygenerowane!</p>
+                            </div>
+
+                            <button
+                                onClick={handleDownloadPdf}
+                                disabled={isDownloading}
+                                className="w-full py-3 px-6 rounded-xl font-medium flex items-center justify-center gap-2 transition-all bg-gradient-to-r from-emerald-500 to-teal-500 text-white hover:opacity-90 disabled:opacity-50"
+                            >
+                                {isDownloading ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        Generowanie PDF...
+                                    </>
+                                ) : (
+                                    <>
+                                        <Download className="w-5 h-5" />
+                                        Pobierz Profesjonalny PDF
+                                    </>
+                                )}
+                            </button>
+                        </div>
+                    )}
                 </div>
 
-                {error && (
-                    <div className="mt-4 p-4 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center gap-2 text-red-400">
-                        <AlertCircle className="w-5 h-5" />
-                        <span>{error}</span>
-                    </div>
-                )}
-
-                {isComplete && (
-                    <div className="mt-4 space-y-3">
-                        <div className="p-4 bg-green-500/10 border border-green-500/30 rounded-xl flex items-center gap-2 text-green-400">
-                            <CheckCircle className="w-5 h-5" />
-                            <span>Memorandum wygenerowane!</span>
-                        </div>
-
-                        <button
-                            onClick={handleDownloadPdf}
-                            className="w-full py-3 px-6 bg-gradient-to-r from-green-500 to-emerald-500 text-white font-semibold rounded-xl hover:from-green-600 hover:to-emerald-600 transition-all flex items-center justify-center gap-2"
-                        >
-                            <Download className="w-5 h-5" />
-                            Pobierz PDF
-                        </button>
-                    </div>
-                )}
+                <div className="mt-6 pt-4 border-t border-white/10 flex items-center justify-center gap-2 text-white/40 text-xs">
+                    <FileText className="w-4 h-4" />
+                    <span>Zgodne z Dz.U. 2020.1053 • Firebase Gemini 2.0</span>
+                </div>
             </div>
-
-            <p className="mt-6 text-center text-xs text-white/40">
-                Zgodne z Dz.U. 2020.1053 • Gemini 2.0 Flash
-            </p>
         </div>
     );
 }
