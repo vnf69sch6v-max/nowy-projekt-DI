@@ -708,7 +708,8 @@ export async function generateProfessionalPDF(
                 const trendColor = rowData.trend.isPositive
                     ? rgb(0.1, 0.6, 0.2)  // zielony dla wzrostu
                     : rgb(0.8, 0.2, 0.1); // czerwony dla spadku
-                const arrow = rowData.trend.isPositive ? '↑' : '↓';
+                // Używamy ASCII zamiast Unicode (Helvetica nie obsługuje ↑↓)
+                const arrow = rowData.trend.isPositive ? '[+]' : '[-]';
                 currentPage.drawText(`${arrow} ${rowData.trend.text}`, {
                     x: xPos + 5, y, size: 9, font: fontBold, color: trendColor
                 });
