@@ -535,16 +535,31 @@ export async function generateProfessionalPDF(
             currentPage.drawText('ANALIZA WSKAZNIKOWA', {
                 x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.15, 0.15, 0.25)
             });
+
+            // Rating badge
+            const lastRatio = allRatios[allRatios.length - 1];
+            const ratingColor = lastRatio.rating.startsWith('A') ? rgb(0.2, 0.6, 0.3) :
+                lastRatio.rating.startsWith('B') ? rgb(0.7, 0.5, 0.1) : rgb(0.7, 0.2, 0.2);
+            currentPage.drawRectangle({
+                x: MARGIN + 180, y: y - 4, width: 45, height: 18,
+                color: ratingColor, borderColor: ratingColor, borderWidth: 1,
+            });
+            currentPage.drawText(lastRatio.rating, {
+                x: MARGIN + 190, y: y - 1, size: 10, font: fontBold, color: rgb(1, 1, 1)
+            });
+            currentPage.drawText(`${lastRatio.score}/100 pkt`, {
+                x: MARGIN + 230, y, size: 9, font, color: rgb(0.4, 0.4, 0.5)
+            });
             y -= 30;
 
-            // Tabela wskaźników
-            const ratioLabels = ['Rok', 'ROE', 'ROA', 'ROS', 'Zadluzenie', 'Przychody YoY', 'Zysk YoY'];
+            // Tabela wskaźników z kolumną Rating
+            const ratioLabels = ['Rok', 'Rating', 'ROE', 'ROA', 'ROS', 'Zadl.', 'Przych.YoY', 'Zysk YoY'];
             const colW = CONTENT_WIDTH / ratioLabels.length;
 
             // Nagłówek tabeli
             let xPos = MARGIN;
             for (const label of ratioLabels) {
-                currentPage.drawText(label, { x: xPos, y, size: 8, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
+                currentPage.drawText(label, { x: xPos, y, size: 7, font: fontBold, color: rgb(0.3, 0.3, 0.3) });
                 xPos += colW;
             }
             y -= 15;
@@ -562,22 +577,29 @@ export async function generateProfessionalPDF(
                 xPos = MARGIN;
                 currentPage.drawText(r.rok.toString(), { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
                 xPos += colW;
+
+                // Rating z kolorem
+                const rColor = r.rating.startsWith('A') ? rgb(0.2, 0.6, 0.3) :
+                    r.rating.startsWith('B') ? rgb(0.6, 0.5, 0.1) : rgb(0.6, 0.2, 0.2);
+                currentPage.drawText(`${r.rating} (${r.score})`, { x: xPos, y, size: 7, font: fontBold, color: rColor });
+                xPos += colW;
+
                 currentPage.drawText(r.roe !== undefined ? `${r.roe.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
                 xPos += colW;
                 currentPage.drawText(r.roa !== undefined ? `${r.roa.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
                 xPos += colW;
                 currentPage.drawText(r.ros !== undefined ? `${r.ros.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
                 xPos += colW;
-                currentPage.drawText(r.debtRatio !== undefined ? `${r.debtRatio.toFixed(1)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
+                currentPage.drawText(r.debtRatio !== undefined ? `${r.debtRatio.toFixed(0)}%` : '-', { x: xPos, y, size: 8, font, color: rgb(0.2, 0.2, 0.2) });
                 xPos += colW;
 
                 // Dynamika z kolorami
                 const revColor = r.revenueGrowth !== undefined && r.revenueGrowth >= 0 ? rgb(0.2, 0.6, 0.3) : rgb(0.7, 0.2, 0.2);
-                currentPage.drawText(formatPercent(r.revenueGrowth), { x: xPos, y, size: 8, font, color: revColor });
+                currentPage.drawText(formatPercent(r.revenueGrowth), { x: xPos, y, size: 7, font, color: revColor });
                 xPos += colW;
 
                 const profColor = r.profitGrowth !== undefined && r.profitGrowth >= 0 ? rgb(0.2, 0.6, 0.3) : rgb(0.7, 0.2, 0.2);
-                currentPage.drawText(formatPercent(r.profitGrowth), { x: xPos, y, size: 8, font, color: profColor });
+                currentPage.drawText(formatPercent(r.profitGrowth), { x: xPos, y, size: 7, font, color: profColor });
 
                 y -= 14;
             }
@@ -587,7 +609,6 @@ export async function generateProfessionalPDF(
             y -= 15;
 
             // Komentarz AI do ostatniego roku
-            const lastRatio = allRatios[allRatios.length - 1];
             const comment = generateFinancialComment(lastRatio);
 
             if (comment) {
@@ -604,13 +625,20 @@ export async function generateProfessionalPDF(
                 }
             }
 
-            // Trend
+            // Trend z ikonami i kolorami
             y -= 10;
-            const trendColor = lastRatio.trend === 'positive' ? rgb(0.2, 0.6, 0.3) :
-                lastRatio.trend === 'negative' ? rgb(0.7, 0.2, 0.2) : rgb(0.5, 0.5, 0.5);
-            const trendIcon = lastRatio.trend === 'positive' ? '↑' : lastRatio.trend === 'negative' ? '↓' : '→';
-            currentPage.drawText(`${trendIcon} ${lastRatio.trendDescription}`, {
+            const trendColor = lastRatio.trend === 'strong_positive' ? rgb(0.1, 0.5, 0.2) :
+                lastRatio.trend === 'positive' ? rgb(0.2, 0.6, 0.3) :
+                    lastRatio.trend === 'strong_negative' ? rgb(0.6, 0.1, 0.1) :
+                        lastRatio.trend === 'negative' ? rgb(0.7, 0.2, 0.2) : rgb(0.5, 0.5, 0.5);
+            const trendIcon = lastRatio.trend.includes('positive') ? 'TREND WZROSTOWY' :
+                lastRatio.trend.includes('negative') ? 'TREND SPADKOWY' : 'TREND STABILNY';
+            currentPage.drawText(trendIcon, {
                 x: MARGIN, y, size: 9, font: fontBold, color: trendColor
+            });
+            y -= 13;
+            currentPage.drawText(lastRatio.trendDescription, {
+                x: MARGIN, y, size: 8, font, color: rgb(0.4, 0.4, 0.5)
             });
             y -= 20;
         }

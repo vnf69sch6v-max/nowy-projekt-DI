@@ -73,6 +73,7 @@ export interface KRSCompany {
 export interface FinancialData {
     rok: number;
     przychodyNetto: number;
+    kosztWlasny?: number;
     zyskBrutto: number;
     zyskNetto: number;
     sumaBilansowa: number;
