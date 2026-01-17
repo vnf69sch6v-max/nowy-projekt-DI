@@ -229,7 +229,7 @@ export async function generateProfessionalPDF(
     drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.5, rgb(0.7, 0.7, 0.7));
 
     // ========================================
-    // TREŚĆ DOKUMENTU
+    // TREŚĆ DOKUMENTU - ulepszone formatowanie
     // ========================================
 
     const lines = cleanContent.split('\n');
@@ -237,7 +237,7 @@ export async function generateProfessionalPDF(
     for (const line of lines) {
         const trimmed = line.trim();
         if (!trimmed) {
-            y -= 8;
+            y -= 6;
             continue;
         }
 
@@ -248,30 +248,92 @@ export async function generateProfessionalPDF(
             pageNum++;
         }
 
+        // Główny nagłówek sekcji (I., II., III., etc.)
         if (/^[IVX]+\.\s/.test(trimmed)) {
+            y -= 25;
+
+            // Tło dla nagłówka sekcji
+            currentPage.drawRectangle({
+                x: MARGIN - 5,
+                y: y - 5,
+                width: CONTENT_WIDTH + 10,
+                height: 24,
+                color: rgb(0.95, 0.95, 0.97),
+            });
+
+            currentPage.drawText(trimmed.toUpperCase(), {
+                x: MARGIN, y, size: 12, font: fontBold, color: rgb(0.1, 0.1, 0.2)
+            });
+            y -= 25;
+            continue;
+        }
+
+        // Podtytuł sekcji (np. "Emitent - podstawowe dane")
+        if (/^[A-Z][a-zA-Z\s\-]+$/.test(trimmed) && trimmed.length < 50) {
             y -= 15;
-            drawLine(currentPage, MARGIN, y + 5, CONTENT_WIDTH, 0.5, rgb(0.8, 0.8, 0.8));
-            y -= 10;
-            currentPage.drawText(trimmed, { x: MARGIN, y, size: 13, font: fontBold, color: rgb(0.1, 0.1, 0.2) });
-            y -= 20;
+            currentPage.drawText(trimmed, {
+                x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.2, 0.2, 0.25)
+            });
+            y -= 18;
             continue;
         }
 
+        // Numerowany punkt główny (1., 2., 3., etc.)
         if (/^\d+\.\s/.test(trimmed)) {
-            y -= 5;
-            currentPage.drawText(trimmed, { x: MARGIN, y, size: 11, font: fontBold, color: rgb(0.2, 0.2, 0.2) });
-            y -= 16;
+            y -= 12;
+
+            // Linia oddzielająca
+            drawLine(currentPage, MARGIN, y + 8, CONTENT_WIDTH, 0.3, rgb(0.9, 0.9, 0.9));
+
+            currentPage.drawText(trimmed.substring(0, 3), {
+                x: MARGIN, y, size: 10, font: fontBold, color: rgb(0.3, 0.3, 0.4)
+            });
+
+            // Tekst po numerze z wcięciem
+            const textAfterNum = trimmed.substring(3);
+            const wrappedMainPoint = wrapText(textAfterNum, font, 10, CONTENT_WIDTH - 25);
+            for (let i = 0; i < wrappedMainPoint.length; i++) {
+                if (y < MARGIN + 50) {
+                    addPageFooter(currentPage, pageNum, font);
+                    currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    y = PAGE_HEIGHT - MARGIN;
+                    pageNum++;
+                }
+                currentPage.drawText(wrappedMainPoint[i], {
+                    x: MARGIN + 25, y, size: 10, font: fontBold, color: rgb(0.15, 0.15, 0.15)
+                });
+                y -= 14;
+            }
+            y -= 4;
             continue;
         }
 
-        if (/^[-=]+$/.test(trimmed)) {
-            y -= 5;
-            drawLine(currentPage, MARGIN, y, CONTENT_WIDTH, 0.3, rgb(0.8, 0.8, 0.8));
-            y -= 10;
+        // Zagnieżdżony punkt (1.1., 1.2., etc.) lub podpunkt z cyfrą
+        if (/^\d+\.\d+\.?\s/.test(trimmed) || /^[a-z]\)\s/.test(trimmed)) {
+            const wrappedSub = wrapText(trimmed, font, 9, CONTENT_WIDTH - 40);
+            for (let i = 0; i < wrappedSub.length; i++) {
+                if (y < MARGIN + 50) {
+                    addPageFooter(currentPage, pageNum, font);
+                    currentPage = pdfDoc.addPage([PAGE_WIDTH, PAGE_HEIGHT]);
+                    y = PAGE_HEIGHT - MARGIN;
+                    pageNum++;
+                }
+                currentPage.drawText(wrappedSub[i], {
+                    x: MARGIN + 30, y, size: 9, font, color: rgb(0.25, 0.25, 0.25)
+                });
+                y -= 13;
+            }
             continue;
         }
 
-        const wrappedLines = wrapText(trimmed, font, 10, CONTENT_WIDTH);
+        // Linie separacji
+        if (/^[-=─]+$/.test(trimmed)) {
+            y -= 8;
+            continue;
+        }
+
+        // Zwykły tekst - z wcięciem 15
+        const wrappedLines = wrapText(trimmed, font, 10, CONTENT_WIDTH - 15);
         for (const wLine of wrappedLines) {
             if (y < MARGIN + 50) {
                 addPageFooter(currentPage, pageNum, font);
@@ -279,7 +341,9 @@ export async function generateProfessionalPDF(
                 y = PAGE_HEIGHT - MARGIN;
                 pageNum++;
             }
-            currentPage.drawText(wLine, { x: MARGIN, y, size: 10, font, color: rgb(0.15, 0.15, 0.15) });
+            currentPage.drawText(wLine, {
+                x: MARGIN + 15, y, size: 10, font, color: rgb(0.2, 0.2, 0.2)
+            });
             y -= 14;
         }
     }
