@@ -59,7 +59,7 @@ export function normalizeFormats(content: string): string {
 }
 
 /**
- * Usuwa powtarzające się sekcje (np. sposób reprezentacji)
+ * Usuwa powtarzające się sekcje (np. sposób reprezentacji, podpisy)
  */
 export function removeDuplicateSections(content: string): string {
     let result = content;
@@ -70,11 +70,19 @@ export function removeDuplicateSections(content: string): string {
         /(DO SKLADANIA OSWIADCZEN W IMIENIU SPOLKI[\s\S]*?PROKURENTEM\s*\.?)(\s*DO SKLADANIA OSWIADCZEN W IMIENIU SPOLKI[\s\S]*?PROKURENTEM\s*\.?)+/gi,
         // Powtórzony spis treści
         /(Spis\s+tres[c]?i[\s\S]*?VII\.\s*ZALACZNIKI)(\s*Spis\s+tres[c]?i[\s\S]*?VII\.\s*ZALACZNIKI)+/gi,
+        // Powtórzony blok podpisów
+        /(PODPISY\s+OS[OÓ]B\s+ODPOWIEDZIALNYCH[\s\S]*?podpis\))(\s*PODPISY\s+OS[OÓ]B\s+ODPOWIEDZIALNYCH[\s\S]*?podpis\))+/gi,
     ];
 
     for (const pattern of duplicatePatterns) {
         result = result.replace(pattern, '$1');
     }
+
+    // Usuń całą sekcję podpisów z treści AI (PDF generator doda własne)
+    result = result.replace(/\n*PODPISY\s+OS[OÓ]B\s+ODPOWIEDZIALNYCH[\s\S]*?_{5,}[\s\S]*?(\(podpis\)\s*)+/gi, '');
+
+    // Usuń powtórzony nagłówek "MEMORANDUM INFORMACYJNE" po spisie treści
+    result = result.replace(/(\n\s*VII\.\s*ZALACZNIKI[\s\S]*?)\n+MEMORANDUM\s+INFORMACYJNE\s*\n/gi, '$1\n');
 
     return result;
 }
