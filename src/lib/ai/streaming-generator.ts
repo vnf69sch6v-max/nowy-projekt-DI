@@ -354,6 +354,43 @@ DANE SPÓŁKI (z odpisu KRS):
 - Sposób reprezentacji: ${company.sposobReprezentacji}
 `;
 
+    // Pre-oblicz wskaźniki YoY
+    let yoyAnalysis = '';
+    if (financials.length >= 2) {
+        const curr = financials[0]; // najnowszy rok
+        const prev = financials[1]; // poprzedni rok
+
+        // Dynamika przychodów
+        if (curr.przychodyNetto && prev.przychodyNetto) {
+            const revenueChange = ((curr.przychodyNetto - prev.przychodyNetto) / prev.przychodyNetto) * 100;
+            const revenueDir = revenueChange >= 0 ? 'wzrost' : 'spadek';
+            yoyAnalysis += `- Przychody: ${revenueDir} o ${Math.abs(revenueChange).toFixed(1)}% (z ${prev.przychodyNetto.toLocaleString('pl-PL')} do ${curr.przychodyNetto.toLocaleString('pl-PL')} PLN)\n`;
+        }
+
+        // Dynamika zysku
+        if (curr.zyskNetto && prev.zyskNetto) {
+            const profitChange = ((curr.zyskNetto - prev.zyskNetto) / Math.abs(prev.zyskNetto)) * 100;
+            const profitDir = profitChange >= 0 ? 'wzrost' : 'spadek';
+            yoyAnalysis += `- Zysk netto: ${profitDir} o ${Math.abs(profitChange).toFixed(1)}% (z ${prev.zyskNetto.toLocaleString('pl-PL')} do ${curr.zyskNetto.toLocaleString('pl-PL')} PLN)\n`;
+        }
+
+        // Rentowność netto
+        if (curr.zyskNetto && curr.przychodyNetto) {
+            const currProfitability = (curr.zyskNetto / curr.przychodyNetto) * 100;
+            yoyAnalysis += `- Rentowność netto ${curr.rok}: ${currProfitability.toFixed(1)}%\n`;
+        }
+        if (prev.zyskNetto && prev.przychodyNetto) {
+            const prevProfitability = (prev.zyskNetto / prev.przychodyNetto) * 100;
+            yoyAnalysis += `- Rentowność netto ${prev.rok}: ${prevProfitability.toFixed(1)}%\n`;
+        }
+
+        // Wskaźnik zadłużenia
+        if (curr.zobowiazania && curr.sumaBilansowa) {
+            const debtRatio = (curr.zobowiazania / curr.sumaBilansowa) * 100;
+            yoyAnalysis += `- Wskaźnik zadłużenia ${curr.rok}: ${debtRatio.toFixed(1)}%\n`;
+        }
+    }
+
     const finData = financials.length > 0
         ? `
 DANE FINANSOWE (z dokumentów):
@@ -363,7 +400,10 @@ Rok ${f.rok}:
 - Zysk (strata) netto: ${f.zyskNetto?.toLocaleString('pl-PL')} PLN
 - Suma bilansowa: ${f.sumaBilansowa?.toLocaleString('pl-PL')} PLN
 - Kapitał własny: ${f.kapitalWlasny?.toLocaleString('pl-PL')} PLN
-- Zobowiązania ogółem: ${f.zobowiazania?.toLocaleString('pl-PL')} PLN`).join('')}`
+- Zobowiązania ogółem: ${f.zobowiazania?.toLocaleString('pl-PL')} PLN`).join('')}
+
+=== PRE-OBLICZONE WSKAŹNIKI (użyj tych wartości!) ===
+${yoyAnalysis || 'Brak danych porównawczych'}`
         : '\nDANE FINANSOWE: [DO UZUPEŁNIENIA - nie dostarczono sprawozdań]\n';
 
     const subsectionsText = section.subsections.map(s => s).join('\n');
