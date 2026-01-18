@@ -614,6 +614,23 @@ E) Ryzyko makroekonomiczne
 - Ryzyko geopolityczne (sankcje, wojny)
 - Ryzyko ESG (środowiskowe, społeczne)
 
+=== RYZYKA ZWIĄZANE Z MAR (Rozporządzenie 596/2014) ===
+
+Zgodnie z Rozporządzeniem MAR (Market Abuse Regulation) uwzględnij:
+
+1. Ryzyko związane z obowiązkami informacyjnymi
+   - Emitent ma obowiązek niezwłocznego ujawniania informacji poufnych
+   - Opóźnienie w publikacji może skutkować sankcjami administracyjnymi
+   
+2. Ryzyko insider trading
+   - Osoby posiadające dostęp do informacji poufnych (zarząd, pracownicy) 
+     podlegają zakazom handlu akcjami przed publikacją informacji
+   - Naruszenie może skutkować karami finansowymi i odpowiedzialnością karną
+
+3. Ryzyko manipulacji rynkiem
+   - Zakaz rozpowszechniania fałszywych informacji mogących wpłynąć na cenę akcji
+   - Emitent musi zachować szczególną staranność w komunikacji z rynkiem
+
 === FORMAT OPISU KAŻDEGO RYZYKA ===
 
 [Nazwa ryzyka]
