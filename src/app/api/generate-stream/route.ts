@@ -9,6 +9,11 @@ import {
 import { generateMockFinancials } from '@/lib/financials/mock';
 import { KRSCompany, FinancialData, OfferDocumentData } from '@/types';
 
+// Route segment config - increase body size limit for file uploads
+export const maxDuration = 120; // 2 minutes for AI processing
+export const dynamic = 'force-dynamic';
+
+
 export async function POST(request: NextRequest) {
     const encoder = new TextEncoder();
 

@@ -1,0 +1,2 @@
+# Ignore large PDF docs for Vercel deployment
+docs/*.pdf
