@@ -420,22 +420,107 @@ ${yoyAnalysis || 'Brak danych porównawczych'}`
 ${companyData}
 ${offerData}
 
-WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
+WYMAGANE PARAGRAFY (rozpisz każdy BARDZO szczegółowo):
 ${subsectionsText}
 
 ${FORMATTING_RULES}
 
-SZCZEGÓŁOWE WYMAGANIA:
-- §1: Podaj pełne dane emitenta (nazwa, KRS, NIP, REGON, adres, kapitał)
-- §2: Jeśli sprzedającym jest emitent, napisz "Sprzedającym jest Emitent"
-- §3: Opisz rodzaj akcji (zwykłe na okaziciela), użyj KONKRETNYCH danych z PARAMETRÓW OFERTY jeśli podane
-- §4: "Emisja nie jest objęta gwarancją" lub szczegóły gwaranta
-- §5: Cena emisyjna - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
-- §6: Cytuj: "Oferowanie papierów wartościowych odbywa się wyłącznie na warunkach i zgodnie z zasadami określonymi w niniejszym memorandum informacyjnym."
-- §7: Powołaj się na art. 37a ustawy z dnia 29 lipca 2005 r. o ofercie publicznej
-- §8: Firma inwestycyjna - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
-- §9: Data ważności - użyj KONKRETNEJ wartości z PARAMETRÓW OFERTY jeśli podana
-- §10: Informacje o zmianach publikowane na stronie [DO UZUPEŁNIENIA]`,
+=== SZCZEGÓŁOWE WYMAGANIA DLA KAŻDEGO PARAGRAFU ===
+
+§1. EMITENT - podaj WSZYSTKIE dane:
+- Pełna nazwa firmy
+- Numer KRS, NIP, REGON
+- Forma prawna (np. spółka akcyjna)
+- Siedziba i adres siedziby
+- Kapitał zakładowy (wysokość i informacja o wpłaceniu)
+- Zarząd (imiona, nazwiska, funkcje)
+- Sposób reprezentacji
+- Telefon, email, strona www: [DO UZUPEŁNIENIA]
+
+§2. SPRZEDAJĄCY:
+"Sprzedającym jest Emitent, tj. ${company.nazwa}."
+
+§3. PAPIERY WARTOŚCIOWE - użyj danych z PARAMETRÓW OFERTY:
+- Rodzaj: akcje zwykłe na okaziciela
+- Seria: [użyj z parametrów lub DO UZUPEŁNIENIA]
+- Liczba akcji: [użyj z parametrów]
+- Wartość nominalna jednej akcji: [użyj z parametrów] PLN
+- Łączna wartość nominalna emisji: [oblicz]
+
+§4. PODMIOT UDZIELAJĄCY ZABEZPIECZENIA:
+"Emisja akcji serii [SERIA] nie jest objęta gwarancją ani zabezpieczeniem 
+osób trzecich. Spółka nie zawarła umów gwarancyjnych dotyczących emisji."
+
+§5. CENA EMISYJNA:
+"Cena emisyjna jednej akcji serii [SERIA] wynosi [CENA] PLN."
+lub "Cena emisyjna zostanie ustalona przez Zarząd w drodze uchwały 
+przed rozpoczęciem subskrypcji, w przedziale od [MIN] do [MAX] PLN."
+
+§6. MIEJSCE I WARUNKI OFERTY:
+"Oferowanie papierów wartościowych odbywa się wyłącznie na warunkach 
+i zgodnie z zasadami określonymi w niniejszym Memorandum Informacyjnym. 
+Memorandum jest jedynym prawnie wiążącym dokumentem zawierającym 
+informacje o ofercie publicznej akcji serii [SERIA]."
+
+§7. PODSTAWA PRAWNA OFERTY PUBLICZNEJ (ROZPISZ SZCZEGÓŁOWO!):
+Napisz pełny paragraf zawierający:
+"Oferta publiczna akcji serii [SERIA] prowadzona jest na podstawie 
+art. 37a ust. 1 ustawy z dnia 29 lipca 2005 r. o ofercie publicznej 
+i warunkach wprowadzania instrumentów finansowych do zorganizowanego 
+systemu obrotu oraz o spółkach publicznych (Dz.U. z 2025 r. poz. 592, t.j.).
+
+Zgodnie z art. 37a ust. 1 ww. ustawy, oferta publiczna może być prowadzona 
+na podstawie memorandum informacyjnego, jeżeli spełniony jest co najmniej 
+jeden z następujących warunków:
+1) oferta jest kierowana wyłącznie do inwestorów, z których każdy nabywa 
+   papiery wartościowe o wartości co najmniej 100 000 EUR,
+2) oferta dotyczy papierów wartościowych o jednostkowej wartości nominalnej 
+   wynoszącej co najmniej 100 000 EUR,
+3) łączna wartość papierów wartościowych będących przedmiotem ofert 
+   publicznych prowadzonych w okresie poprzednich 12 miesięcy nie przekracza 
+   2 500 000 EUR (lub równowartości w PLN).
+
+Niniejsze Memorandum zostało sporządzone zgodnie z wymogami rozporządzenia 
+Ministra Finansów z dnia 12 maja 2020 r. w sprawie szczegółowych warunków, 
+jakim powinno odpowiadać memorandum informacyjne (Dz.U. z 2020 r. poz. 1053)."
+
+§8. FIRMA INWESTYCYJNA:
+Jeśli brak: "Oferta publiczna akcji serii [SERIA] prowadzona jest bez 
+pośrednictwa firmy inwestycyjnej, zgodnie z art. 37a ust. 3 ustawy o ofercie."
+Jeśli podana: użyj nazwy firmy z PARAMETRÓW OFERTY.
+
+§9. DATA WAŻNOŚCI MEMORANDUM (ROZPISZ SZCZEGÓŁOWO!):
+"Niniejsze Memorandum Informacyjne jest ważne przez okres 12 miesięcy 
+od dnia jego sporządzenia, tj. od dnia [DATA SPORZĄDZENIA] do dnia 
+[DATA + 12 MIESIĘCY].
+
+Informacje aktualizujące zawarte w niniejszym Memorandum zostały 
+uwzględnione według stanu na dzień [DATA SPORZĄDZENIA].
+
+Po upływie okresu ważności Memorandum nie może stanowić podstawy 
+prowadzenia oferty publicznej. W przypadku kontynuowania oferty, 
+Emitent sporządzi nowe Memorandum Informacyjne."
+
+§10. TRYB INFORMOWANIA O ZMIANACH (ROZPISZ BARDZO SZCZEGÓŁOWO!):
+"Informacje o zmianach danych zawartych w niniejszym Memorandum, 
+w okresie jego ważności, będą podawane do publicznej wiadomości 
+zgodnie z art. 37b ustawy o ofercie publicznej poprzez:
+
+1) Publikację na stronie internetowej Emitenta: [URL DO UZUPEŁNIENIA]
+
+Aktualizacje będą dotyczyć w szczególności:
+a) istotnych zmian w sytuacji finansowej lub prawnej Emitenta,
+b) zmian w składzie organów Emitenta,
+c) istotnych umów zawartych przez Emitenta,
+d) postępowań sądowych, arbitrażowych lub administracyjnych,
+e) zmian w strukturze akcjonariatu przekraczających 5% głosów na WZA,
+f) wydarzeń mogących mieć istotny wpływ na sytuację majątkową Emitenta.
+
+Aktualizacje będą publikowane niezwłocznie, nie później niż w terminie 
+7 dni roboczych od dnia wystąpienia zdarzenia uzasadniającego aktualizację.
+
+Inwestorzy są zobowiązani do zapoznania się z ewentualnymi aktualizacjami 
+Memorandum przed podjęciem decyzji inwestycyjnej."`,
 
         risks: `Napisz rozdzial II. CZYNNIKI RYZYKA zgodnie z Dz.U. 2020.1053.
 
@@ -447,51 +532,235 @@ ${subsectionsText}
 
 ${FORMATTING_RULES}
 
+=== BEZWZGLĘDNE WYMAGANIE: MINIMUM 12 RYZYK! ===
+
+Musisz opisać CO NAJMNIEJ 12 różnych ryzyk podzielonych na 5 kategorii.
+Każde ryzyko MUSI zawierać:
+1. Nazwę ryzyka (tytuł)
+2. Opis na czym polega (2-3 zdania)
+3. Potencjalny wpływ na Emitenta (konkretne skutki)
+4. Działania mitygujące (jeśli Emitent je podejmuje)
+
+=== 5 KATEGORII RYZYK (WSZYSTKIE OBOWIĄZKOWE) ===
+
+§11. RYZYKA ZWIĄZANE Z DZIAŁALNOŚCIĄ EMITENTA (minimum 4 ryzyka):
+
 ${industryRisksText}
 
-KLUCZOWE INSTRUKCJE - AUTOMATYCZNA OCENA RYZYK:
-Na podstawie danych finansowych SAMODZIELNIE ocen i opisz ryzyka. NIE uzywaj [DO UZUPELNIENIA]!
+OBOWIĄZKOWE RYZYKA OPERACYJNE:
+A) Ryzyko konkurencji
+   - Analizuj branżę PKD: ${company.pkdPrzewazajace}
+   - Opisz głównych konkurentów i pozycję rynkową
+   
+B) Ryzyko utraty kluczowych pracowników/kadry zarządzającej
+   - Emitent jest zależny od kompetencji Zarządu i kluczowych pracowników
+   
+C) Ryzyko technologiczne (dla IT/gaming) LUB Ryzyko operacyjne (dla innych branż)
+   - Zmiany technologii, przestarzałe rozwiązania
+   
+D) Ryzyko uzależnienia od kluczowych klientów/dostawców
+   - Koncentracja przychodów, zależność od partnerów
 
-ANALIZA DANYCH FINANSOWYCH (uzyj konkretnych liczb):
+§12. RYZYKA O CHARAKTERZE FINANSOWYM (minimum 4 ryzyka):
+
+DANE DO ANALIZY (użyj konkretnych liczb!):
 - Przychody: ${fin?.przychodyNetto?.toLocaleString('pl-PL') || 0} PLN
 - Zysk netto: ${fin?.zyskNetto?.toLocaleString('pl-PL') || 0} PLN
-- Aktywa obrotowe: ${fin?.aktywaObrotowe?.toLocaleString('pl-PL') || 0} PLN
-- Zobowiazania: ${fin?.zobowiazania?.toLocaleString('pl-PL') || 0} PLN
-- Kapital wlasny: ${fin?.kapitalWlasny?.toLocaleString('pl-PL') || 0} PLN
+- Zobowiązania: ${fin?.zobowiazania?.toLocaleString('pl-PL') || 0} PLN
+- Kapitał własny: ${fin?.kapitalWlasny?.toLocaleString('pl-PL') || 0} PLN
+- Wskaźnik zadłużenia: ${fin?.sumaBilansowa ? ((fin.zobowiazania / fin.sumaBilansowa) * 100).toFixed(1) : '?'}%
+- Rentowność netto: ${fin?.przychodyNetto ? ((fin.zyskNetto / fin.przychodyNetto) * 100).toFixed(1) : '?'}%
 
-KONKRETNE WSKAZNIKI (oblicz i uzyj w opisach):
-- Wskaznik zadluzenia: ${fin?.sumaBilansowa ? ((fin.zobowiazania / fin.sumaBilansowa) * 100).toFixed(1) : '?'}%
-- Rentownosc netto: ${fin?.przychodyNetto ? ((fin.zyskNetto / fin.przychodyNetto) * 100).toFixed(1) : '?'}%
+OBOWIĄZKOWE RYZYKA FINANSOWE:
+A) Ryzyko płynności finansowej
+   - Czy spółka ma środki na bieżącą działalność?
+   - Użyj danych o aktywach obrotowych i zobowiązaniach
+   
+B) Ryzyko walutowe (jeśli eksport) LUB Ryzyko inflacyjne
+   - Wpływ zmian kursów/inflacji na wyniki
+   
+C) Ryzyko kredytowe
+   - Zagrożenie niewypłacalnością kontrahentów
+   
+D) Ryzyko stopy procentowej
+   - Wpływ zmian stóp na koszty finansowania
 
-STRUKTURA SEKCJI:
-- §11 (5+ ryzyk operacyjnych - UŻyj RYZYK BRANŻOWYCH z góry!)
-- §12 (4+ ryzyka finansowe - użyj KONKRETNYCH wskaźników!)
-- §13 (4+ ryzyka inwestycyjne)
+§13. RYZYKA ZWIĄZANE Z INWESTYCJĄ W AKCJE (minimum 4 ryzyka):
 
-Kazde ryzyko opisz w 3-5 zdaniach z konkretnymi liczbami!`,
+OBOWIĄZKOWE RYZYKA INWESTYCYJNE:
+A) Ryzyko braku płynności akcji
+   - Akcje nie są notowane na giełdzie
+   - Trudność w szybkiej sprzedaży
+   
+B) Ryzyko rozwodnienia kapitału
+   - Przyszłe emisje mogą zmniejszyć udział akcjonariuszy
+   
+C) Ryzyko braku wypłaty dywidendy
+   - Spółka może reinwestować zyski zamiast wypłacać dywidendę
+   
+D) Ryzyko wyceny akcji
+   - Cena emisyjna może nie odzwierciedlać wartości rynkowej
+   
+E) Ryzyko makroekonomiczne
+   - Wpływ recesji, kryzysu gospodarczego na wyniki Emitenta
+
+=== DODATKOWE RYZYKA (wybierz pasujące do spółki) ===
+
+- Ryzyko zmian przepisów prawnych (regulacyjne)
+- Ryzyko sporów sądowych
+- Ryzyko ochrony własności intelektualnej
+- Ryzyko cyberbezpieczeństwa
+- Ryzyko reputacyjne
+- Ryzyko geopolityczne (sankcje, wojny)
+- Ryzyko ESG (środowiskowe, społeczne)
+
+=== FORMAT OPISU KAŻDEGO RYZYKA ===
+
+[Nazwa ryzyka]
+[Opis ryzyka na czym polega - 2-3 zdania]
+Wpływ na Emitenta: [konkretne skutki - utrata przychodów, wzrost kosztów, etc.]
+Mitygacja: [co robi Emitent żeby ograniczyć to ryzyko, lub "Emitent podejmuje działania mające na celu ograniczenie tego ryzyka poprzez..."]
+
+PAMIĘTAJ: Użyj KONKRETNYCH danych finansowych i branżowych!`,
 
         offer: `Napisz rozdział IV. DANE O OFERCIE AKCJI zgodnie z Dz.U. 2020.1053.
 
 ${companyData}
 ${offerData}
 
-WYMAGANE PARAGRAFY (rozpisz każdy szczegółowo):
+WYMAGANE PARAGRAFY (rozpisz każdy BARDZO szczegółowo):
 ${subsectionsText}
 
 ${FORMATTING_RULES}
 
-SZCZEGÓŁOWE WYMAGANIA (użyj KONKRETNYCH danych z PARAMETRÓW OFERTY jeśli podane!):
-- §16: Rodzaj (akcje zwykłe na okaziciela serii [SERIA]), liczba [LICZBA AKCJI], wartość nominalna [WARTOŚĆ NOMINALNA] PLN - użyj danych z PARAMETRÓW OFERTY
-- §17: Cele emisji - użyj KONKRETNYCH celów z PARAMETRÓW OFERTY jeśli podane
-- §18: Szacunkowe koszty: przygotowanie dokumentacji, doradztwo, opłaty giełdowe
-- §19: Uchwała WZA nr [_] z dnia [_]
-- §20: Czy akcjonariusze mają prawo pierwszeństwa
-- §21: Od kiedy akcje uczestniczą w dywidendzie
-- §22: Prawa majątkowe (dywidenda, udział w masie likwidacyjnej) i korporacyjne (głos na WZA, prawo poboru)
-- §23: Polityka dywidendowa - czy spółka zamierza wypłacać dywidendę
-- §24: Podatek od dywidendy 19%, podatek od zysków kapitałowych 19%
-- §25: Umowy gwarancyjne [DO UZUPEŁNIENIA] lub brak
-- §26: Terminy oferty [TERMIN SUBSKRYPCJI], miejsce zapisów [MIEJSCE ZAPISÓW], min. liczba akcji [MINIMALNA LICZBA] - użyj danych z PARAMETRÓW OFERTY`,
+=== SZCZEGÓŁOWE WYMAGANIA DLA KAŻDEGO PARAGRAFU ===
+
+§16. RODZAJ, LICZBA I WARTOŚĆ PAPIERÓW WARTOŚCIOWYCH (ROZPISZ BARDZO SZCZEGÓŁOWO!):
+"Przedmiotem niniejszej oferty publicznej jest [LICZBA AKCJI] akcji zwykłych 
+na okaziciela serii [SERIA] o wartości nominalnej [WARTOŚĆ NOMINALNA] PLN każda.
+
+CHARAKTERYSTYKA AKCJI SERII [SERIA]:
+1. Rodzaj akcji: akcje zwykłe na okaziciela
+2. Forma akcji: akcje zdematerializowane (zapis elektroniczny)
+3. Seria: [SERIA]
+4. Liczba akcji w ofercie: [LICZBA]
+5. Wartość nominalna jednej akcji: [WARTOŚĆ NOMINALNA] PLN
+6. Łączna wartość nominalna emisji: [LICZBA × WARTOŚĆ NOMINALNA] PLN
+
+UPRZYWILEJOWANIA I OGRANICZENIA:
+- Uprzywilejowanie: Akcje serii [SERIA] nie są uprzywilejowane co do głosu ani dywidendy.
+- Ograniczenia zbywalności: Brak ograniczeń w zbywaniu akcji.
+- Zabezpieczenia emisji: Emisja nie jest zabezpieczona.
+- Świadczenia dodatkowe: Brak świadczeń dodatkowych związanych z akcjami."
+
+§17. CELE EMISJI (użyj danych z PARAMETRÓW OFERTY):
+"Środki pozyskane z emisji akcji serii [SERIA] zostaną przeznaczone na:
+[opisz cele szczegółowo - rozwój działalności, inwestycje, spłata zobowiązań, etc.]"
+
+§18. KOSZTY EMISJI:
+"Szacunkowe koszty związane z przeprowadzeniem oferty publicznej:
+- Przygotowanie dokumentacji (memorandum, wyceny): [kwota lub szacunek] PLN
+- Usługi doradcze (prawne, finansowe): [kwota lub szacunek] PLN
+- Opłaty rejestrowe i notarialne: [kwota lub szacunek] PLN
+- Marketing i promocja oferty: [kwota lub szacunek] PLN
+Łączne szacunkowe koszty emisji: [suma lub szacunek] PLN"
+
+§19. PODSTAWA PRAWNA EMISJI:
+"Emisja akcji serii [SERIA] następuje na podstawie:
+- Uchwały nr [NUMER] Nadzwyczajnego/Zwyczajnego Walnego Zgromadzenia 
+  Akcjonariuszy z dnia [DATA] w sprawie podwyższenia kapitału zakładowego 
+  w drodze emisji akcji serii [SERIA]."
+
+§20. PRAWO PIERWSZEŃSTWA:
+"Zgodnie z art. 433 Kodeksu spółek handlowych, dotychczasowi akcjonariusze 
+[MAJĄ/NIE MAJĄ] prawa pierwszeństwa objęcia akcji nowej emisji (prawo poboru).
+[Jeśli prawo poboru wyłączone:] Prawo poboru zostało wyłączone na podstawie 
+uchwały WZA z dnia [DATA], w interesie Spółki, ze względu na [uzasadnienie]."
+
+§21. DATA UCZESTNICTWA W DYWIDENDZIE:
+"Akcje serii [SERIA] uczestniczą w dywidendzie począwszy od dnia wpisu 
+podwyższenia kapitału zakładowego do rejestru przedsiębiorców KRS, 
+tj. od roku obrotowego [ROK]."
+
+§22. PRAWA Z OFEROWANYCH PAPIERÓW WARTOŚCIOWYCH (ROZPISZ BARDZO SZCZEGÓŁOWO!):
+"Z akcji serii [SERIA] przysługują następujące prawa:
+
+A. PRAWA MAJĄTKOWE:
+1. Prawo do dywidendy (art. 347 KSH)
+   Akcjonariusze mają prawo do udziału w zysku wykazanym w sprawozdaniu 
+   finansowym, zbadanym przez biegłego rewidenta, przeznaczonym przez 
+   walne zgromadzenie do wypłaty akcjonariuszom.
+
+2. Prawo do udziału w masie likwidacyjnej (art. 474 KSH)
+   W przypadku likwidacji Spółki, akcjonariusze mają prawo do proporcjonalnego 
+   udziału w majątku pozostałym po zaspokojeniu wierzycieli.
+
+3. Prawo poboru akcji nowej emisji (art. 433 KSH)
+   Akcjonariusze mają prawo pierwszeństwa objęcia akcji nowej emisji 
+   proporcjonalnie do posiadanych akcji, chyba że uchwała WZA wyłączy prawo poboru.
+
+B. PRAWA KORPORACYJNE:
+1. Prawo głosu na walnym zgromadzeniu (art. 411 KSH)
+   Każda akcja zwykła daje prawo do jednego głosu na walnym zgromadzeniu.
+
+2. Prawo do informacji (art. 428 KSH)
+   Akcjonariusze mogą żądać od zarządu informacji dotyczących Spółki 
+   podczas obrad walnego zgromadzenia.
+
+3. Prawo do zaskarżania uchwał (art. 422, 425 KSH)
+   Akcjonariusze mogą wnieść powództwo przeciwko Spółce o uchylenie 
+   lub stwierdzenie nieważności uchwały walnego zgromadzenia.
+
+4. Prawo żądania zwołania WZA (art. 400 KSH)
+   Akcjonariusze reprezentujący co najmniej 5% kapitału zakładowego 
+   mogą żądać zwołania nadzwyczajnego walnego zgromadzenia."
+
+§23. POLITYKA DYWIDENDOWA:
+"Emitent [zamierza/nie zamierza] wypłacać dywidendę w najbliższych latach.
+[Jeśli zamierza:] Intencją Zarządu jest rekomendowanie wypłaty dywidendy 
+w wysokości [XX]% zysku netto, przy zachowaniu stabilności finansowej Spółki.
+[Jeśli nie zamierza:] Zyski będą reinwestowane w rozwój działalności operacyjnej."
+
+§24. ZASADY OPODATKOWANIA:
+"A. Opodatkowanie dywidendy:
+Dochody z dywidendy podlegają opodatkowaniu zryczałtowanym podatkiem 
+dochodowym w wysokości 19% (art. 30a ust. 1 pkt 4 ustawy o PIT).
+Płatnikiem podatku jest Spółka.
+
+B. Opodatkowanie zysków kapitałowych:
+Dochody z odpłatnego zbycia akcji podlegają opodatkowaniu podatkiem 
+dochodowym w wysokości 19% (art. 30b ustawy o PIT).
+Obowiązek podatkowy ciąży na akcjonariuszu."
+
+§25. UMOWY O GWARANCJĘ EMISJI:
+"Emitent nie zawarł umów o gwarancję emisji (underwriting). 
+Spółka samodzielnie ponosi ryzyko niepowodzenia oferty."
+LUB
+"Emitent zawarł umowę o gwarancję emisji z [NAZWA FIRMY] na następujących warunkach: [szczegóły]"
+
+§26. ZASADY DYSTRYBUCJI AKCJI (ROZPISZ SZCZEGÓŁOWO!):
+"1. TERMINY OFERTY:
+   - Otwarcie subskrypcji: [DATA]
+   - Zamknięcie subskrypcji: [DATA]
+   - Przydział akcji: [DATA]
+   
+2. MIEJSCE SKŁADANIA ZAPISÓW:
+   - [ADRES / PLATFORMA ONLINE]
+   
+3. MINIMALNA LICZBA AKCJI W ZAPISIE:
+   - [MINIMALNA LICZBA] akcji
+   
+4. MAKSYMALNA LICZBA AKCJI W ZAPISIE:
+   - [MAKSYMALNA LICZBA lub 'bez ograniczeń']
+   
+5. CENA I PŁATNOŚĆ:
+   - Cena za jedną akcję: [CENA] PLN
+   - Termin wpłaty: [TERMIN]
+   - Rachunek do wpłat: [NUMER RACHUNKU]
+   
+6. PRZYDZIAŁ AKCJI:
+   - W przypadku nadsubskrypcji: [zasady redukcji]
+   - Zwrot wpłat: [terminy i sposób]"`,
 
         issuer: `Napisz rozdział V. DANE O EMITENCIE zgodnie z Dz.U. 2020.1053.
 
