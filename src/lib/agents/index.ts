@@ -21,6 +21,10 @@ export type { GenerationContext } from './legal-content-generator';
 // Agent 6: Verification Agent
 export { verifySection, verifyAllSections, quickVerify } from './verification-agent';
 
+// Agent 7: PDF Renderer
+export { MemorandumPDFRenderer, renderMemorandumPDF } from './pdf-renderer';
+export type { RenderOptions } from './pdf-renderer';
+
 // Pipeline Orchestrator
 export { PipelineOrchestrator, createPipeline } from './pipeline-orchestrator';
 export type { PipelineState, PipelineOptions } from './pipeline-orchestrator';
