@@ -14,6 +14,13 @@ export { analyzeFinancials, calculateRatios, calculateYoYDynamics, formatPLN, fo
 // Agent 4: Risk Analyzer
 export { analyzeRisks, getIndustryName, getIndustryRisks, calculateRiskScore } from './risk-analyzer';
 
+// Agent 5: Legal Content Generator
+export { generateSection, generateAllSections, getSectionTemplates, getSectionsByChapter } from './legal-content-generator';
+export type { GenerationContext } from './legal-content-generator';
+
+// Agent 6: Verification Agent
+export { verifySection, verifyAllSections, quickVerify } from './verification-agent';
+
 // Types
 export type {
     AgentResult,
