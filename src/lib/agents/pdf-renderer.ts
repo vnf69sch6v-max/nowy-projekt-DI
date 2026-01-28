@@ -455,10 +455,171 @@ export class MemorandumPDFRenderer {
         // Add footer to last page
         this.addFooter();
 
-        // Note: TOC would need to be rendered after we know all page numbers
-        // For a production version, you'd need a two-pass approach
+        // Two-pass approach: Now we have all page numbers, render TOC
+        // We need to insert TOC pages after title page and adjust page numbers
+        if (this.options.includeTOC && this.tocEntries.length > 0) {
+            await this.insertTOCAfterTitlePage();
+        }
 
         return this.pdfDoc!.save();
+    }
+
+    // Insert TOC pages after the title page and adjust page references
+    private async insertTOCAfterTitlePage(): Promise<void> {
+        if (!this.pdfDoc || !this.font || !this.fontBold) return;
+
+        // Create a temporary PDF for TOC
+        const tocDoc = await PDFDocument.create();
+        const tocFont = await tocDoc.embedFont(StandardFonts.Helvetica);
+        const tocFontBold = await tocDoc.embedFont(StandardFonts.HelveticaBold);
+
+        // Calculate how many pages we need for TOC
+        const entriesPerPage = 35;
+        const tocPageCount = Math.ceil(this.tocEntries.length / entriesPerPage);
+
+        // Create TOC pages
+        for (let pageIdx = 0; pageIdx < tocPageCount; pageIdx++) {
+            const tocPage = tocDoc.addPage(PDF_CONFIG.pageSize);
+            let tocY = tocPage.getHeight() - PDF_CONFIG.margins.top;
+
+            // TOC Header (only on first page)
+            if (pageIdx === 0) {
+                tocPage.drawText('SPIS TRESCI', {
+                    x: PDF_CONFIG.margins.left,
+                    y: tocY,
+                    size: PDF_CONFIG.fontSize.chapter,
+                    font: tocFontBold,
+                    color: PDF_CONFIG.colors.accent
+                });
+                tocY -= 30;
+            }
+
+            // Draw TOC entries for this page
+            const startIdx = pageIdx * entriesPerPage;
+            const endIdx = Math.min(startIdx + entriesPerPage, this.tocEntries.length);
+
+            let currentChapter = '';
+
+            for (let i = startIdx; i < endIdx; i++) {
+                const entry = this.tocEntries[i];
+                const isChapter = entry.title.match(/^[IVX]+\./);
+
+                // Adjust page number: add TOC pages offset
+                const adjustedPage = entry.page + tocPageCount;
+
+                if (isChapter) {
+                    if (entry.title !== currentChapter) {
+                        currentChapter = entry.title;
+                        tocY -= 8;
+
+                        tocPage.drawText(sanitizeText(entry.title), {
+                            x: PDF_CONFIG.margins.left,
+                            y: tocY,
+                            size: PDF_CONFIG.fontSize.section,
+                            font: tocFontBold,
+                            color: PDF_CONFIG.colors.dark
+                        });
+                        tocY -= PDF_CONFIG.fontSize.section * PDF_CONFIG.lineHeight;
+                    }
+                } else {
+                    // Section entry with dots and page number
+                    const titleText = sanitizeText(entry.title);
+                    const pageText = String(adjustedPage);
+
+                    // Calculate available width for dots
+                    const maxWidth = tocPage.getWidth() - PDF_CONFIG.margins.left - PDF_CONFIG.margins.right - 20;
+                    const titleWidth = tocFont.widthOfTextAtSize(titleText, PDF_CONFIG.fontSize.body);
+                    const pageWidth = tocFont.widthOfTextAtSize(pageText, PDF_CONFIG.fontSize.body);
+                    const dotsWidth = maxWidth - titleWidth - pageWidth - 10;
+                    const dotCount = Math.max(3, Math.floor(dotsWidth / tocFont.widthOfTextAtSize('.', PDF_CONFIG.fontSize.body)));
+                    const dots = '.'.repeat(dotCount);
+
+                    // Draw title
+                    tocPage.drawText(titleText, {
+                        x: PDF_CONFIG.margins.left + 20,
+                        y: tocY,
+                        size: PDF_CONFIG.fontSize.body,
+                        font: tocFont,
+                        color: PDF_CONFIG.colors.dark
+                    });
+
+                    // Draw dots
+                    tocPage.drawText(dots, {
+                        x: PDF_CONFIG.margins.left + 20 + titleWidth + 5,
+                        y: tocY,
+                        size: PDF_CONFIG.fontSize.body,
+                        font: tocFont,
+                        color: PDF_CONFIG.colors.gray
+                    });
+
+                    // Draw page number (right-aligned)
+                    tocPage.drawText(pageText, {
+                        x: tocPage.getWidth() - PDF_CONFIG.margins.right - pageWidth,
+                        y: tocY,
+                        size: PDF_CONFIG.fontSize.body,
+                        font: tocFont,
+                        color: PDF_CONFIG.colors.dark
+                    });
+
+                    tocY -= PDF_CONFIG.fontSize.body * PDF_CONFIG.lineHeight;
+                }
+            }
+
+            // Add page number to TOC page
+            const tocPageNumText = `Strona ${pageIdx + 2}`;
+            const tocPageNumWidth = tocFont.widthOfTextAtSize(tocPageNumText, PDF_CONFIG.fontSize.footer);
+            tocPage.drawText(tocPageNumText, {
+                x: (tocPage.getWidth() - tocPageNumWidth) / 2,
+                y: 35,
+                size: PDF_CONFIG.fontSize.footer,
+                font: tocFont,
+                color: PDF_CONFIG.colors.gray
+            });
+        }
+
+        // Copy TOC pages to main document after title page (index 0)
+        const tocPages = await this.pdfDoc.copyPages(tocDoc, tocDoc.getPageIndices());
+
+        // Insert TOC pages after title page
+        for (let i = 0; i < tocPages.length; i++) {
+            this.pdfDoc.insertPage(1 + i, tocPages[i]);
+        }
+
+        // Update page numbers on content pages (they shifted by tocPageCount)
+        const allPages = this.pdfDoc.getPages();
+        for (let i = 1 + tocPageCount; i < allPages.length; i++) {
+            const page = allPages[i];
+            const newPageNum = i + 1;
+
+            // Redraw page number (we need to cover the old one first)
+            // Draw white rectangle over old page number
+            page.drawRectangle({
+                x: 0,
+                y: 25,
+                width: page.getWidth(),
+                height: 25,
+                color: rgb(1, 1, 1)
+            });
+
+            // Draw new page number
+            const pageText = `Strona ${newPageNum}`;
+            const pageTextWidth = this.font!.widthOfTextAtSize(pageText, PDF_CONFIG.fontSize.footer);
+            page.drawText(pageText, {
+                x: (page.getWidth() - pageTextWidth) / 2,
+                y: 35,
+                size: PDF_CONFIG.fontSize.footer,
+                font: this.font!,
+                color: PDF_CONFIG.colors.gray
+            });
+
+            // Redraw footer line
+            page.drawLine({
+                start: { x: PDF_CONFIG.margins.left, y: 50 },
+                end: { x: page.getWidth() - PDF_CONFIG.margins.right, y: 50 },
+                thickness: 0.5,
+                color: PDF_CONFIG.colors.lightGray
+            });
+        }
     }
 }
 

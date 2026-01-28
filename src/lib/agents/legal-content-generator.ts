@@ -1,7 +1,7 @@
 // =========================================
 // AGENT 5: LEGAL CONTENT GENERATOR
 // =========================================
-// Generates legal content for each memorandum section (§1-§48)
+// Generates legal content for each memorandum section (§1-§47)
 
 import { getVertexAI, getGenerativeModel } from '@firebase/vertexai';
 import { getFirebaseApp } from '@/lib/firebase';
@@ -231,6 +231,76 @@ Użyj ryzyk z kategorii INWESTYCYJNE. Minimum 4 ryzyka:
 Podaj: nazwa, forma prawna, kraj siedziby, adres, NIP, REGON.`
     },
     {
+        number: '§17',
+        title: 'Czas trwania Emitenta',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §17 CZAS TRWANIA EMITENTA:
+"Emitent został utworzony na czas nieoznaczony, zgodnie z postanowieniami
+umowy spółki/statutu. Emitent nie przewiduje zakończenia działalności
+w określonym terminie."`
+    },
+    {
+        number: '§18',
+        title: 'Przepisy prawa, na podstawie których utworzono Emitenta',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §18 PRZEPISY PRAWA NA PODSTAWIE KTÓRYCH UTWORZONO EMITENTA:
+"Emitent został utworzony i działa na podstawie przepisów prawa polskiego,
+w szczególności:
+1) Ustawy z dnia 15 września 2000 r. - Kodeks spółek handlowych
+   (Dz.U. z 2024 r. poz. 18, t.j.),
+2) Ustawy z dnia 29 lipca 2005 r. o ofercie publicznej i warunkach
+   wprowadzania instrumentów finansowych do zorganizowanego systemu obrotu
+   oraz o spółkach publicznych (Dz.U. z 2025 r. poz. 592, t.j.),
+3) Ustawy z dnia 29 lipca 2005 r. o obrocie instrumentami finansowymi
+   (Dz.U. z 2024 r. poz. 722, t.j.)."`
+    },
+    {
+        number: '§19',
+        title: 'Sąd rejestrowy',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §19 SĄD REJESTROWY:
+"Emitent jest wpisany do rejestru przedsiębiorców Krajowego Rejestru Sądowego
+prowadzonego przez Sąd Rejonowy {SAD_REJONOWY}, Wydział Gospodarczy Krajowego
+Rejestru Sądowego, pod numerem KRS {KRS}.
+
+Data pierwszego wpisu do rejestru: {DATA_REJESTRACJI}"`
+    },
+    {
+        number: '§20',
+        title: 'Historia Emitenta',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §20 HISTORIA EMITENTA:
+Opisz krótko historię spółki, obejmując:
+1. Data i miejsce założenia
+2. Główne etapy rozwoju
+3. Ważne wydarzenia korporacyjne (podwyższenia kapitału, przekształcenia)
+4. Rozwój działalności operacyjnej
+5. Kluczowe osiągnięcia
+
+Użyj danych: {NAZWA}, założona w {MIEJSCOWOSC}, KRS: {KRS}`
+    },
+    {
+        number: '§21',
+        title: 'Opis podstawowej działalności Emitenta',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'financials'],
+        prompt: `Wygeneruj §21 OPIS PODSTAWOWEJ DZIAŁALNOŚCI EMITENTA:
+1. Główny przedmiot działalności według PKD: {PKD}
+2. Charakterystyka oferowanych produktów/usług
+3. Rynki, na których działa Emitent (geograficzne i branżowe)
+4. Główni odbiorcy i dostawcy (bez ujawniania danych poufnych)
+5. Pozycja konkurencyjna
+6. Sezonowość działalności (jeśli dotyczy)
+7. Istotne patenty, licencje, znaki towarowe (jeśli dotyczy)
+
+Użyj danych finansowych do pokazania skali działalności:
+Przychody: {PRZYCHODY} PLN`
+    },
+    {
         number: '§22',
         title: 'Prawa z oferowanych papierów wartościowych',
         chapter: 'III. DANE O EMITENCIE',
@@ -253,6 +323,102 @@ C. OGRANICZENIA:
 Akcje nie są uprzywilejowane. Brak ograniczeń w zbywaniu.`
     },
     {
+        number: '§23',
+        title: 'Zasady zmiany praw akcjonariuszy',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §23 ZASADY ZMIANY PRAW AKCJONARIUSZY:
+"Zmiana praw z akcji wymaga zmiany statutu Emitenta i następuje zgodnie
+z przepisami Kodeksu spółek handlowych:
+
+1. Uchwała Walnego Zgromadzenia Akcjonariuszy podjęta większością 3/4 głosów
+   (art. 415 KSH),
+2. Wpis zmiany statutu do rejestru przedsiębiorców KRS (art. 430 KSH),
+3. W przypadku uprzywilejowania akcji - zgoda wszystkich akcjonariuszy,
+   których akcje dotyczą (art. 415 § 3 KSH).
+
+Prawa z akcji nie mogą być zmienione bez zgody akcjonariusza, którego
+prawa mają ulec zmianie, chyba że statut stanowi inaczej."`
+    },
+    {
+        number: '§24',
+        title: 'Sposób działania Walnego Zgromadzenia Akcjonariuszy',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §24 SPOSÓB DZIAŁANIA WALNEGO ZGROMADZENIA AKCJONARIUSZY:
+Opisz szczegółowo:
+
+1. ZWOŁYWANIE WZA:
+- Zarząd zwołuje WZA (art. 399 KSH)
+- Ogłoszenie w MSiG min. 3 tygodnie przed WZA
+- Akcjonariusze posiadający min. 5% kapitału mogą żądać zwołania (art. 400 KSH)
+
+2. KOMPETENCJE WZA:
+- Rozpatrzenie i zatwierdzenie sprawozdań
+- Podział zysku lub pokrycie straty
+- Udzielenie absolutorium członkom organów
+- Zmiany statutu
+- Podwyższenie lub obniżenie kapitału zakładowego
+- Emisja obligacji
+- Połączenie, podział, przekształcenie spółki
+- Rozwiązanie i likwidacja spółki
+
+3. PODEJMOWANIE UCHWAŁ:
+- Bezwzględna większość głosów, chyba że ustawa/statut przewidują inaczej
+- Kworum według statutu Emitenta`
+    },
+    {
+        number: '§25',
+        title: 'Organy Emitenta',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'board'],
+        prompt: `Wygeneruj §25 ORGANY EMITENTA:
+Opisz strukturę organów spółki:
+
+1. ZARZĄD:
+- Skład: {ZARZAD}
+- Kadencja: [określona w statucie] lat
+- Kompetencje: prowadzenie spraw spółki, reprezentacja
+- Sposób reprezentacji: {REPREZENTACJA}
+
+2. RADA NADZORCZA (jeśli dotyczy):
+- Skład: [członkowie RN]
+- Kadencja: [określona w statucie] lat
+- Kompetencje: nadzór nad działalnością spółki
+
+3. WALNE ZGROMADZENIE AKCJONARIUSZY:
+- Najwyższy organ spółki
+- Kompetencje określone w KSH i statucie`
+    },
+    {
+        number: '§26',
+        title: 'Opis kapitału zakładowego',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'offer'],
+        prompt: `Wygeneruj §26 OPIS KAPITAŁU ZAKŁADOWEGO:
+Przedstaw szczegółowe informacje o kapitale:
+
+1. WYSOKOŚĆ KAPITAŁU ZAKŁADOWEGO:
+- Kapitał zakładowy: {KAPITAL} PLN
+- Kapitał wpłacony: {KAPITAL} PLN (w całości)
+
+2. STRUKTURA KAPITAŁU PRZED EMISJĄ:
+- Liczba akcji: [przed emisją]
+- Wartość nominalna: {WARTOSC_NOMINALNA} PLN
+- Serie akcji i ich liczba
+
+3. STRUKTURA KAPITAŁU PO EMISJI (planowana):
+- Liczba akcji ogółem: [po emisji]
+- W tym akcje nowej emisji serii {SERIA}: {LICZBA_AKCJI}
+- Rozwodnienie dotychczasowych akcjonariuszy: [X]%
+
+4. UPRZYWILEJOWANIE AKCJI:
+Akcje nie są uprzywilejowane / Opis uprzywilejowania
+
+5. KAPITAŁ DOCELOWY (jeśli dotyczy):
+[Informacje o kapitale docelowym]`
+    },
+    {
         number: '§27',
         title: 'Informacje o osobach zarządzających',
         chapter: 'III. DANE O EMITENCIE',
@@ -262,6 +428,219 @@ Dla każdego członka Zarządu podaj:
 - Imię i nazwisko, funkcja
 - Wykształcenie i doświadczenie zawodowe
 - Powiązania z Emitentem (posiadane akcje, jeśli dotyczy)`
+    },
+    {
+        number: '§28',
+        title: 'Struktura akcjonariatu',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['shareholders', 'company'],
+        prompt: `Wygeneruj §28 STRUKTURA AKCJONARIATU:
+Przedstaw tabelę głównych akcjonariuszy (powyżej 5% kapitału/głosów):
+
+| Akcjonariusz | Liczba akcji | % kapitału | % głosów |
+|--------------|--------------|------------|----------|
+{AKCJONARIUSZE}
+
+Łączna liczba akcji: [liczba]
+Akcje w wolnym obrocie (free float): [liczba] ([X]%)
+
+Informacje o:
+- Porozumieniach akcjonariuszy (art. 87 ustawy o ofercie)
+- Akcjach własnych posiadanych przez Emitenta
+- Znanych Emitentowi umowach mogących wpłynąć na strukturę akcjonariatu`
+    },
+    {
+        number: '§29',
+        title: 'Uzależnienie od innych podmiotów',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'shareholders'],
+        prompt: `Wygeneruj §29 UZALEŻNIENIE OD INNYCH PODMIOTÓW:
+Opisz powiązania kapitałowe i osobowe:
+
+1. POWIĄZANIA KAPITAŁOWE:
+- Podmioty dominujące wobec Emitenta
+- Podmioty zależne od Emitenta
+- Podmioty powiązane (wspólni akcjonariusze)
+
+2. POWIĄZANIA OSOBOWE:
+- Członkowie organów pełniący funkcje w innych podmiotach
+- Wspólni członkowie zarządów/rad nadzorczych
+
+3. ISTOTNE UMOWY Z PODMIOTAMI POWIĄZANYMI:
+- Transakcje z podmiotami powiązanymi za ostatni rok obrotowy
+- Warunki tych transakcji (rynkowe/nierynkowe)
+
+Jeśli brak: "Emitent nie jest bezpośrednio ani pośrednio uzależniony
+od innych podmiotów."`
+    },
+    {
+        number: '§30',
+        title: 'Informacje o postępowaniach sądowych i administracyjnych',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §30 INFORMACJE O POSTĘPOWANIACH SĄDOWYCH I ADMINISTRACYJNYCH:
+Przedstaw informacje o:
+
+1. POSTĘPOWANIA SĄDOWE:
+- Sprawy, w których Emitent jest stroną
+- Wartość przedmiotu sporu (jeśli przekracza 10% kapitałów własnych)
+- Etap postępowania i prognozowane rozstrzygnięcie
+
+2. POSTĘPOWANIA ARBITRAŻOWE:
+- Toczące się postępowania arbitrażowe
+
+3. POSTĘPOWANIA ADMINISTRACYJNE:
+- Postępowania podatkowe, kontrole
+- Postępowania przed UOKiK, KNF, innych regulatorów
+
+4. POSTĘPOWANIA EGZEKUCYJNE:
+- Prowadzone egzekucje przeciwko Emitentowi
+
+Jeśli brak: "Według najlepszej wiedzy Emitenta, na dzień sporządzenia
+Memorandum nie toczą się żadne postępowania sądowe, arbitrażowe
+ani administracyjne, których stroną jest Emitent, które mogłyby mieć
+istotny wpływ na sytuację finansową lub działalność Emitenta."`
+    },
+    {
+        number: '§31',
+        title: 'Otoczenie rynkowe i konkurencja',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §31 OTOCZENIE RYNKOWE I KONKURENCJA:
+Opisz branżę i pozycję konkurencyjną Emitenta:
+
+1. CHARAKTERYSTYKA RYNKU:
+- Branża: {PKD} - {BRANZA}
+- Wielkość rynku i dynamika wzrostu
+- Główne trendy i czynniki wzrostu
+- Regulacje branżowe
+
+2. POZYCJA KONKURENCYJNA:
+- Szacunkowy udział Emitenta w rynku
+- Główni konkurenci
+- Przewagi konkurencyjne Emitenta
+- Bariery wejścia na rynek
+
+3. KLUCZOWI KLIENCI I DOSTAWCY:
+- Koncentracja odbiorców (bez nazw, jeśli poufne)
+- Koncentracja dostawców
+- Zależność od kluczowych kontrahentów`
+    },
+    {
+        number: '§32',
+        title: 'Strategia i plany rozwoju',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'offer'],
+        prompt: `Wygeneruj §32 STRATEGIA I PLANY ROZWOJU:
+Przedstaw strategię rozwoju Emitenta:
+
+1. MISJA I WIZJA:
+- Misja Emitenta
+- Wizja rozwoju na najbliższe lata
+
+2. CELE STRATEGICZNE:
+- Cele krótkoterminowe (1-2 lata)
+- Cele średnioterminowe (3-5 lat)
+- Mierniki realizacji celów
+
+3. PLANOWANE INWESTYCJE:
+- Główne projekty inwestycyjne
+- Przewidywane nakłady
+- Źródła finansowania (w tym środki z emisji)
+
+4. ROZWÓJ PRODUKTÓW/USŁUG:
+- Planowane nowe produkty/usługi
+- Rozwój oferty
+
+5. EKSPANSJA GEOGRAFICZNA:
+- Plany wejścia na nowe rynki`
+    },
+    {
+        number: '§33',
+        title: 'Istotne umowy',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §33 ISTOTNE UMOWY:
+Opisz umowy istotne dla działalności Emitenta:
+
+1. UMOWY HANDLOWE:
+- Umowy o wartości przekraczającej 10% przychodów
+- Długoterminowe kontrakty z kluczowymi kontrahentami
+
+2. UMOWY KREDYTOWE I FINANSOWE:
+- Umowy kredytowe (kwota, oprocentowanie, zabezpieczenia, terminy)
+- Umowy leasingowe
+- Umowy faktoringowe
+
+3. UMOWY UBEZPIECZENIOWE:
+- Kluczowe polisy ubezpieczeniowe
+
+4. UMOWY O WSPÓŁPRACY:
+- Umowy joint venture
+- Umowy licencyjne
+- Umowy franczyzowe
+
+5. UMOWY Z PODMIOTAMI POWIĄZANYMI:
+- Umowy z akcjonariuszami, członkami organów
+
+Jeśli brak umów istotnych: "Emitent nie zawarł umów, które można
+uznać za istotne dla jego działalności, poza umowami zawieranymi
+w normalnym toku działalności gospodarczej."`
+    },
+    {
+        number: '§34',
+        title: 'Zobowiązania pozabilansowe',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'financials'],
+        prompt: `Wygeneruj §34 ZOBOWIĄZANIA POZABILANSOWE:
+Opisz zobowiązania warunkowe i pozabilansowe:
+
+1. GWARANCJE I PORĘCZENIA:
+- Udzielone gwarancje bankowe
+- Poręczenia za zobowiązania innych podmiotów
+- Gwarancje korporacyjne
+
+2. ZOBOWIĄZANIA WARUNKOWE:
+- Potencjalne zobowiązania z tytułu sporów
+- Zobowiązania z tytułu umów (kary umowne)
+
+3. LEASING OPERACYJNY:
+- Wartość przyszłych płatności leasingowych
+- Harmonogram płatności
+
+4. INNE ZOBOWIĄZANIA:
+- Zobowiązania inwestycyjne
+- Pozostałe zobowiązania nieujęte w bilansie
+
+Jeśli brak: "Na dzień sporządzenia Memorandum Emitent nie posiada
+istotnych zobowiązań pozabilansowych."`
+    },
+    {
+        number: '§35',
+        title: 'Polityka dywidendowa',
+        chapter: 'III. DANE O EMITENCIE',
+        requiredData: ['company', 'financials'],
+        prompt: `Wygeneruj §35 POLITYKA DYWIDENDOWA:
+Opisz politykę dywidendową Emitenta:
+
+1. DOTYCHCZASOWE DYWIDENDY:
+| Rok | Dywidenda na akcję | Łączna kwota | Stopa dywidendy |
+|-----|-------------------|--------------|-----------------|
+[Dane za ostatnie 3 lata lub informacja o braku wypłat]
+
+2. DEKLAROWANA POLITYKA DYWIDENDOWA:
+- Założenia polityki dywidendowej
+- Planowany wskaźnik wypłaty dywidendy (payout ratio)
+- Czynniki wpływające na decyzje o wypłacie
+
+3. OGRANICZENIA W WYPŁACIE DYWIDENDY:
+- Ograniczenia ustawowe (art. 348 KSH)
+- Ograniczenia wynikające z umów kredytowych
+- Ograniczenia statutowe
+
+OSTRZEŻENIE: "Emitent nie gwarantuje wypłaty dywidendy w przyszłości.
+Decyzja o wypłacie dywidendy zależy od sytuacji finansowej Emitenta
+i jest podejmowana przez WZA na wniosek Zarządu."`
     },
 
     // ======= ROZDZIAŁ IV: DANE FINANSOWE (§36-§42) =======
@@ -287,6 +666,198 @@ WSKAŹNIKI FINANSOWE:
 - ROA: {ROA}%
 - Wskaźnik zadłużenia: {ZADLUZENIE}%
 - Płynność bieżąca: {PLYNNOSC}`
+    },
+    {
+        number: '§37',
+        title: 'Opinia biegłego rewidenta',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['financials'],
+        prompt: `Wygeneruj §37 OPINIA BIEGŁEGO REWIDENTA:
+Przedstaw informacje o badaniu sprawozdań finansowych:
+
+1. INFORMACJE O BIEGŁYM REWIDENCIE:
+- Nazwa firmy audytorskiej
+- Numer na liście PANA (Polska Agencja Nadzoru Audytowego)
+- Kluczowy biegły rewident
+
+2. ZAKRES BADANIA:
+- Okres objęty badaniem
+- Rodzaj opinii (bez zastrzeżeń / z zastrzeżeniami / negatywna / odmowa)
+
+3. TREŚĆ OPINII (streszczenie):
+"Sprawozdanie finansowe za rok {ROK} zostało zbadane przez biegłego
+rewidenta, który wydał opinię [bez zastrzeżeń / z zastrzeżeniami].
+Sprawozdanie przedstawia rzetelny i jasny obraz sytuacji majątkowej
+i finansowej Emitenta."
+
+4. ZASTRZEŻENIA / UWAGI (jeśli dotyczy):
+[Opis zastrzeżeń lub objaśnień zawartych w opinii]
+
+Jeśli sprawozdanie nie było badane:
+"Sprawozdanie finansowe Emitenta za rok {ROK} nie podlegało
+obowiązkowemu badaniu przez biegłego rewidenta zgodnie z przepisami
+ustawy o rachunkowości."`
+    },
+    {
+        number: '§38',
+        title: 'Zasady rachunkowości',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §38 ZASADY RACHUNKOWOŚCI:
+Opisz główne zasady rachunkowości stosowane przez Emitenta:
+
+1. PODSTAWA SPORZĄDZENIA:
+- Sprawozdania sporządzane zgodnie z Ustawą o rachunkowości / MSSF
+- Rok obrotowy: od 1 stycznia do 31 grudnia
+
+2. GŁÓWNE ZASADY WYCENY:
+a) Środki trwałe - wg cen nabycia pomniejszonych o odpisy amortyzacyjne
+b) Zapasy - wg cen nabycia lub kosztów wytworzenia, nie wyższych od cen sprzedaży netto
+c) Należności - w kwocie wymaganej zapłaty z uwzględnieniem odpisów aktualizujących
+d) Inwestycje krótkoterminowe - wg wartości rynkowej lub ceny nabycia
+e) Zobowiązania - w kwocie wymagającej zapłaty
+
+3. METODY AMORTYZACJI:
+- Środki trwałe: metoda liniowa
+- Wartości niematerialne: metoda liniowa
+
+4. ISTOTNE ZMIANY ZASAD RACHUNKOWOŚCI:
+[Opis zmian lub informacja o braku zmian]`
+    },
+    {
+        number: '§39',
+        title: 'Opis aktywów trwałych',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['financials'],
+        prompt: `Wygeneruj §39 OPIS AKTYWÓW TRWAŁYCH:
+Przedstaw strukturę aktywów trwałych Emitenta:
+
+1. RZECZOWE AKTYWA TRWAŁE:
+| Kategoria | Wartość brutto | Umorzenie | Wartość netto |
+|-----------|---------------|-----------|---------------|
+| Grunty | X PLN | - | X PLN |
+| Budynki i budowle | X PLN | X PLN | X PLN |
+| Maszyny i urządzenia | X PLN | X PLN | X PLN |
+| Środki transportu | X PLN | X PLN | X PLN |
+| Inne | X PLN | X PLN | X PLN |
+| RAZEM | X PLN | X PLN | X PLN |
+
+2. WARTOŚCI NIEMATERIALNE I PRAWNE:
+- Oprogramowanie
+- Licencje
+- Znaki towarowe
+- Wartość firmy (goodwill)
+
+3. INWESTYCJE DŁUGOTERMINOWE:
+- Udziały i akcje w innych podmiotach
+- Długoterminowe aktywa finansowe
+
+4. OBCIĄŻENIA AKTYWÓW:
+- Hipoteki
+- Zastawy
+- Przewłaszczenia`
+    },
+    {
+        number: '§40',
+        title: 'Kapitał obrotowy',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['financials', 'ratios'],
+        prompt: `Wygeneruj §40 KAPITAŁ OBROTOWY:
+Przedstaw analizę kapitału obrotowego:
+
+1. STRUKTURA KAPITAŁU OBROTOWEGO:
+| Pozycja | Wartość | % aktywów obrotowych |
+|---------|---------|---------------------|
+| Zapasy | X PLN | X% |
+| Należności krótkoterminowe | X PLN | X% |
+| Środki pieniężne | X PLN | X% |
+| Inne aktywa obrotowe | X PLN | X% |
+| AKTYWA OBROTOWE RAZEM | X PLN | 100% |
+| Zobowiązania krótkoterminowe | X PLN | - |
+| KAPITAŁ OBROTOWY NETTO | X PLN | - |
+
+2. WSKAŹNIKI PŁYNNOŚCI:
+- Płynność bieżąca (current ratio): {PLYNNOSC}
+- Płynność szybka (quick ratio): [wartość]
+- Płynność gotówkowa: [wartość]
+
+3. CYKL KONWERSJI GOTÓWKI:
+- Cykl rotacji zapasów: [X] dni
+- Cykl rotacji należności: [X] dni
+- Cykl rotacji zobowiązań: [X] dni
+- Cykl konwersji gotówki: [X] dni
+
+4. OŚWIADCZENIE O WYSTARCZALNOŚCI KAPITAŁU OBROTOWEGO:
+"Według oceny Zarządu, kapitał obrotowy Emitenta jest wystarczający
+do pokrycia bieżących potrzeb operacyjnych w okresie co najmniej
+12 miesięcy od daty publikacji Memorandum."`
+    },
+    {
+        number: '§41',
+        title: 'Prognozy finansowe',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['company', 'financials'],
+        prompt: `Wygeneruj §41 PROGNOZY FINANSOWE:
+Przedstaw prognozy finansowe (jeśli Emitent je publikuje):
+
+OPCJA A - EMITENT PUBLIKUJE PROGNOZY:
+1. ZAŁOŻENIA PROGNOZY:
+- Okres prognozy: [rok/lata]
+- Kluczowe założenia makroekonomiczne
+- Założenia dotyczące branży
+
+2. PROGNOZOWANE WYNIKI:
+| Pozycja | Prognoza | Zmiana vs rok poprzedni |
+|---------|----------|------------------------|
+| Przychody | X PLN | +X% |
+| EBITDA | X PLN | +X% |
+| Zysk netto | X PLN | +X% |
+
+3. CZYNNIKI RYZYKA DLA PROGNOZY:
+- Główne czynniki mogące wpłynąć na realizację
+- Wrażliwość prognozy na zmiany założeń
+
+OPCJA B - EMITENT NIE PUBLIKUJE PROGNOZ:
+"Zarząd Emitenta podjął decyzję o niepublikowaniu prognoz finansowych
+w niniejszym Memorandum ze względu na niepewność otoczenia rynkowego
+oraz chęć uniknięcia tworzenia nieuzasadnionych oczekiwań wśród inwestorów.
+
+Historyczne wyniki finansowe Emitenta zostały przedstawione w §36."`
+    },
+    {
+        number: '§42',
+        title: 'Szczegółowy opis wykorzystania środków z emisji',
+        chapter: 'IV. SPRAWOZDANIA FINANSOWE',
+        requiredData: ['offer'],
+        prompt: `Wygeneruj §42 SZCZEGÓŁOWY OPIS WYKORZYSTANIA ŚRODKÓW Z EMISJI:
+Przedstaw planowane wykorzystanie środków:
+
+1. SZACUNKOWE WPŁYWY Z EMISJI:
+- Wpływy brutto: {LICZBA_AKCJI} × {CENA} PLN = X PLN
+- Szacunkowe koszty emisji: {KOSZTY} PLN
+- Wpływy netto: X PLN
+
+2. PLANOWANE PRZEZNACZENIE ŚRODKÓW:
+| Cel | Kwota | % wpływów | Termin realizacji |
+|-----|-------|-----------|------------------|
+| [Cel 1] | X PLN | X% | [Q/rok] |
+| [Cel 2] | X PLN | X% | [Q/rok] |
+| [Cel 3] | X PLN | X% | [Q/rok] |
+| Kapitał obrotowy | X PLN | X% | bieżąco |
+| RAZEM | X PLN | 100% | - |
+
+3. SZCZEGÓŁOWY OPIS KAŻDEGO CELU:
+{CELE_EMISJI}
+
+4. HARMONOGRAM WYKORZYSTANIA:
+- Q1-Q2: [opis]
+- Q3-Q4: [opis]
+- Kolejny rok: [opis]
+
+5. ZASTRZEŻENIE:
+"W przypadku pozyskania mniejszych środków niż zakładane, Zarząd
+zastrzega sobie prawo do zmiany kolejności i zakresu realizacji
+poszczególnych celów emisji."`
     },
 
     // ======= ROZDZIAŁ V: INFORMACJE DODATKOWE =======
@@ -319,6 +890,103 @@ Struktura kosztów:
 - Opłaty prawne i doradcze: X PLN
 - Promocja oferty: X PLN
 - Pozostałe koszty: X PLN`
+    },
+    {
+        number: '§45',
+        title: 'Załączniki',
+        chapter: 'V. INFORMACJE DODATKOWE',
+        requiredData: ['company'],
+        prompt: `Wygeneruj §45 ZAŁĄCZNIKI:
+Przedstaw listę załączników do Memorandum:
+
+ZAŁĄCZNIKI DO MEMORANDUM INFORMACYJNEGO:
+
+1. Odpis aktualny z rejestru przedsiębiorców KRS
+2. Statut Emitenta (tekst jednolity)
+3. Uchwała WZA w sprawie emisji akcji serii {SERIA}
+4. Sprawozdanie finansowe za rok {ROK} wraz z opinią biegłego rewidenta
+   (jeśli podlegało badaniu)
+5. Sprawozdanie finansowe za rok {ROK-1}
+6. Formularz zapisu na akcje serii {SERIA}
+7. Pełnomocnictwo do składania zapisów (wzór)
+
+UWAGA: "Załączniki stanowią integralną część niniejszego Memorandum
+Informacyjnego i są dostępne:
+a) w siedzibie Emitenta pod adresem: {ADRES}
+b) na stronie internetowej Emitenta: [adres www]
+c) [w biurze firmy inwestycyjnej - jeśli dotyczy]"`
+    },
+    {
+        number: '§46',
+        title: 'Oświadczenie Emitenta',
+        chapter: 'V. INFORMACJE DODATKOWE',
+        requiredData: ['company', 'board'],
+        prompt: `Wygeneruj §46 OŚWIADCZENIE EMITENTA:
+Sporządź formalne oświadczenie zgodne z wymogami prawa:
+
+"OŚWIADCZENIE EMITENTA
+
+Zarząd {NAZWA} z siedzibą w {MIEJSCOWOSC} oświadcza, że:
+
+1. Zgodnie z najlepszą wiedzą Emitenta, informacje zawarte w niniejszym
+   Memorandum Informacyjnym są prawdziwe, rzetelne i zgodne ze stanem
+   faktycznym oraz że nie pominięto w nim żadnych faktów, które mogłyby
+   wpływać na jego znaczenie.
+
+2. Memorandum Informacyjne zostało sporządzone zgodnie z wymogami
+   rozporządzenia Ministra Finansów z dnia 12 maja 2020 r. w sprawie
+   szczegółowych warunków, jakim powinno odpowiadać memorandum informacyjne
+   (Dz.U. z 2020 r. poz. 1053).
+
+3. Emitent jest świadomy odpowiedzialności cywilnej i karnej za podanie
+   nieprawdziwych lub wprowadzających w błąd informacji w Memorandum,
+   zgodnie z art. 98 ustawy o ofercie publicznej.
+
+4. Emitent zobowiązuje się do publikowania aktualizacji Memorandum
+   w przypadku wystąpienia istotnych zmian w przedstawionych informacjach.
+
+{MIEJSCOWOSC}, dnia [DATA]
+
+Za Zarząd {NAZWA}:
+{ZARZAD}"`
+    },
+    {
+        number: '§47',
+        title: 'Podpisy osób odpowiedzialnych za informacje zawarte w Memorandum',
+        chapter: 'V. INFORMACJE DODATKOWE',
+        requiredData: ['company', 'board'],
+        prompt: `Wygeneruj §47 PODPISY OSÓB ODPOWIEDZIALNYCH:
+Sporządź sekcję z miejscami na podpisy:
+
+"PODPISY OSÓB ODPOWIEDZIALNYCH ZA INFORMACJE ZAWARTE W MEMORANDUM
+
+Niniejsze Memorandum Informacyjne zostało sporządzone przez {NAZWA}
+z siedzibą w {MIEJSCOWOSC}.
+
+Za treść Memorandum odpowiadają następujące osoby:
+
+1. ZARZĄD EMITENTA:
+{ZARZAD}
+
+Oświadczam(y), że informacje zawarte w niniejszym Memorandum Informacyjnym
+są prawdziwe, rzetelne i zgodne ze stanem faktycznym oraz że nie pominięto
+w nim żadnych faktów, które mogłyby wpływać na jego znaczenie.
+
+_____________________          _____________________
+[Imię i Nazwisko]              [Imię i Nazwisko]
+[Funkcja]                      [Funkcja]
+
+{MIEJSCOWOSC}, dnia [DATA]
+
+
+[Miejsce na pieczęć Emitenta]
+
+
+Memorandum Informacyjne sporządzono na podstawie art. 37a ustawy z dnia
+29 lipca 2005 r. o ofercie publicznej i warunkach wprowadzania instrumentów
+finansowych do zorganizowanego systemu obrotu oraz o spółkach publicznych
+(Dz.U. z 2025 r. poz. 592, t.j.) oraz rozporządzenia Ministra Finansów
+z dnia 12 maja 2020 r. (Dz.U. z 2020 r. poz. 1053)."`
     },
 ];
 
