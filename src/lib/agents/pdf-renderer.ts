@@ -523,15 +523,16 @@ export class MemorandumPDFRenderer {
                     }
                 } else {
                     // Section entry with dots and page number
-                    const titleText = sanitizeText(entry.title);
+                    const titleText = sanitizeText(entry.title).substring(0, 60); // Limit title length
                     const pageText = String(adjustedPage);
 
-                    // Calculate available width for dots
-                    const maxWidth = tocPage.getWidth() - PDF_CONFIG.margins.left - PDF_CONFIG.margins.right - 20;
+                    // Calculate available width for dots (with safety checks)
+                    const maxWidth = tocPage.getWidth() - PDF_CONFIG.margins.left - PDF_CONFIG.margins.right - 40;
                     const titleWidth = tocFont.widthOfTextAtSize(titleText, PDF_CONFIG.fontSize.body);
                     const pageWidth = tocFont.widthOfTextAtSize(pageText, PDF_CONFIG.fontSize.body);
-                    const dotsWidth = maxWidth - titleWidth - pageWidth - 10;
-                    const dotCount = Math.max(3, Math.floor(dotsWidth / tocFont.widthOfTextAtSize('.', PDF_CONFIG.fontSize.body)));
+                    const dotsWidth = Math.max(10, maxWidth - titleWidth - pageWidth - 10);
+                    const dotCharWidth = tocFont.widthOfTextAtSize('.', PDF_CONFIG.fontSize.body);
+                    const dotCount = Math.max(3, Math.min(100, Math.floor(dotsWidth / dotCharWidth)));
                     const dots = '.'.repeat(dotCount);
 
                     // Draw title
