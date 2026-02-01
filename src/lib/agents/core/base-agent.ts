@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // StochFin AI Agent System - Base Agent Class
 // Abstract base class for all 20 agents

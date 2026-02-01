@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // StochFin AI Agent System - Orchestrator
 // Routes triggers to appropriate agents

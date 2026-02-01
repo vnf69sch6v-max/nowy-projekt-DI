@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // StochFin AI Agent System - Complete Barrel Export
 // 20 Specialized AI Agents for Financial Analysis

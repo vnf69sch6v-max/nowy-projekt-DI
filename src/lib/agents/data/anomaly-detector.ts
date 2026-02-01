@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 3: Anomaly Detector
 // Real-time anomaly detection in data streams

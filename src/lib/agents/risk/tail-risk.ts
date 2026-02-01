@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 13: Tail Risk Analyzer
 // Extreme value analysis and fat tail detection

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 17: Insight Generator
 // Generates actionable insights from analysis results

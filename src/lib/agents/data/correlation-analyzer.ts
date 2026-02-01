@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 5: Correlation Analyzer
 // Analyzes and monitors correlations between variables

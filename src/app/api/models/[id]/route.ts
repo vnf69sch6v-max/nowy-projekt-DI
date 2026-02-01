@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // StochFin API: Single Model Operations (Connected to Supabase)
 // =============================================

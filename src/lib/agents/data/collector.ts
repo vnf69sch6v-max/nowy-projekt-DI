@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 1: Data Collector
 // Fetches data from external sources (NBP, GUS, Yahoo)

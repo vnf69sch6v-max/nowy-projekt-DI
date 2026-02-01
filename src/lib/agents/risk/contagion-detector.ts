@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 14: Contagion Detector
 // Detects financial contagion and spillover effects

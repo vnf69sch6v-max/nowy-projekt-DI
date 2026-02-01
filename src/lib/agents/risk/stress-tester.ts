@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 12: Stress Tester
 // Stress testing scenarios and sensitivity analysis

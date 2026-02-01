@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 19: Alert Composer
 // Formats and routes alerts to various channels

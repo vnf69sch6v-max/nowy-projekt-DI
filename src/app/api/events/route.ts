@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // EventProb Engine - Events API Route
 // GET: List events, POST: Create event

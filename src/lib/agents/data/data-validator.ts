@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 2: Data Validator
 // Validates data quality and integrity

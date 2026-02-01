@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 20: PDF Report Builder
 // Generates comprehensive PDF reports

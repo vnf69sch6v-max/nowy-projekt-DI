@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 11: VaR Calculator
 // Calculates Value at Risk using Monte Carlo

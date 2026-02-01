@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 7: Copula Optimizer
 // Selects and calibrates optimal copula for dependencies

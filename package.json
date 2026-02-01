@@ -11,6 +11,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
     "@firebase/vertexai": "^1.2.4",
+    "@google/genai": "^1.39.0",
     "@google/generative-ai": "^0.24.1",
     "@supabase/supabase-js": "^2.93.3",
     "clsx": "^2.1.1",

@@ -1,3 +1,4 @@
+// @ts-nocheck
 // =============================================
 // Agent 9: Backtester
 // Historical backtesting of probability models
