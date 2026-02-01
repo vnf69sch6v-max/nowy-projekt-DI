@@ -1,20 +1,30 @@
-// Firebase config exports
-export { app, db, auth, storage } from './config';
+// =========================================
+// Firebase configuration for Agents
+// =========================================
+// Matches the working implementation in streaming-generator.ts
 
-// Helper function for Vertex AI
-export function getFirebaseApp() {
-    // Dynamic import to avoid issues with SSR
-    const { getApps, getApp, initializeApp } = require('firebase/app');
+import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
 
-    const firebaseConfig = {
-        apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
-        authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
-        projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
-        storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-        messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
-        appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
-        measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
-    };
+// Firebase config - same as streaming-generator
+const firebaseConfig = {
+    apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY!,
+    authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN!,
+    projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID!,
+    storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET!,
+    messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID!,
+    appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID!,
+};
 
-    return getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+/**
+ * Get or initialize Firebase app instance
+ * This function ensures Firebase is only initialized once
+ */
+export function getFirebaseApp(): FirebaseApp {
+    if (getApps().length === 0) {
+        return initializeApp(firebaseConfig);
+    }
+    return getApp();
 }
+
+// Re-export from config for compatibility
+export { db, auth, storage } from './config';

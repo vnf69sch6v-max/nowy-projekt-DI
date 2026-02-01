@@ -1,121 +1,678 @@
-@import "tailwindcss";
+/* =============================================
+   StochFin Design System
+   Premium financial application styling
+   ============================================= */
+
+@import 'tailwindcss';
+
+/* =============================================
+   CSS Custom Properties (Design Tokens)
+   ============================================= */
 
 :root {
-  --background: #0f172a;
-  --foreground: #f8fafc;
-  --primary: 220 90% 56%;
-  --primary-dark: 220 85% 45%;
-  --accent: 38 92% 50%;
-  --surface: #1e293b;
-  --surface-light: #334155;
-  --text-muted: #94a3b8;
-  --border: rgba(255, 255, 255, 0.1);
+  /* Brand Colors */
+  --color-primary: 220 90% 56%;
+  --color-primary-light: 220 90% 70%;
+  --color-primary-dark: 220 90% 40%;
+
+  /* Risk Colors (Critical for financial viz) */
+  --color-risk-low: 142 76% 36%;
+  /* Green */
+  --color-risk-medium: 48 96% 53%;
+  /* Yellow/Amber */
+  --color-risk-high: 25 95% 53%;
+  /* Orange */
+  --color-risk-critical: 0 84% 60%;
+  /* Red */
+
+  /* Confidence Bands */
+  --color-band-p90: 220 90% 56% / 0.1;
+  --color-band-p75: 220 90% 56% / 0.2;
+  --color-band-p50: 220 90% 56% / 0.4;
+  --color-median-line: 220 90% 56%;
+
+  /* Background Surfaces */
+  --surface-0: 222 47% 11%;
+  /* Darkest */
+  --surface-1: 217 33% 17%;
+  --surface-2: 215 28% 23%;
+  --surface-3: 213 27% 28%;
+  --surface-4: 210 25% 35%;
+
+  /* Text */
+  --text-primary: 210 40% 96%;
+  --text-secondary: 215 20% 65%;
+  --text-muted: 215 15% 45%;
+
+  /* Borders */
+  --border-subtle: 215 20% 25%;
+  --border-default: 215 25% 30%;
+  --border-strong: 215 30% 40%;
+
+  /* Spacing */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px hsl(0 0% 0% / 0.3);
+  --shadow-md: 0 4px 12px hsl(0 0% 0% / 0.4);
+  --shadow-lg: 0 8px 24px hsl(0 0% 0% / 0.5);
+  --shadow-glow: 0 0 20px hsl(var(--color-primary) / 0.2);
+
+  /* Glassmorphism */
+  --glass-bg: hsl(var(--surface-1) / 0.8);
+  --glass-border: hsl(210 40% 96% / 0.1);
+  --backdrop-blur: 12px;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+/* Light theme override */
+[data-theme="light"] {
+  --surface-0: 0 0% 100%;
+  --surface-1: 210 40% 98%;
+  --surface-2: 210 40% 96%;
+  --surface-3: 210 25% 93%;
+  --surface-4: 210 20% 88%;
+
+  --text-primary: 222 47% 11%;
+  --text-secondary: 215 20% 40%;
+  --text-muted: 215 15% 55%;
+
+  --border-subtle: 215 20% 88%;
+  --border-default: 215 25% 82%;
+  --border-strong: 215 30% 75%;
+
+  --glass-bg: hsl(0 0% 100% / 0.8);
+  --glass-border: hsl(222 47% 11% / 0.05);
+}
+
+/* =============================================
+   Base Styles
+   ============================================= */
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: var(--font-sans, Arial), Helvetica, sans-serif;
+  font-family: var(--font-inter, 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif);
+  background: hsl(var(--surface-0));
+  color: hsl(var(--text-primary));
+  line-height: 1.6;
   min-height: 100vh;
 }
 
-/* Gradient background */
-.gradient-bg {
-  background: 
-    radial-gradient(ellipse at top, rgba(59, 130, 246, 0.15) 0%, transparent 50%),
-    radial-gradient(ellipse at bottom right, rgba(139, 92, 246, 0.1) 0%, transparent 50%),
-    var(--background);
+/* =============================================
+   Typography
+   ============================================= */
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  font-weight: 600;
+  line-height: 1.2;
+  color: hsl(var(--text-primary));
 }
 
-/* Glassmorphism effects */
-.glass {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
+h1 {
+  font-size: 2.5rem;
+  letter-spacing: -0.02em;
 }
 
-.glass-card {
-  background: rgba(30, 41, 59, 0.7);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--border);
-  border-radius: 16px;
+h2 {
+  font-size: 2rem;
+  letter-spacing: -0.015em;
 }
 
-/* Animated gradient border */
-@keyframes gradient-shift {
-  0%, 100% {
-    background-position: 0% 50%;
+h3 {
+  font-size: 1.5rem;
+  letter-spacing: -0.01em;
+}
+
+h4 {
+  font-size: 1.25rem;
+}
+
+h5 {
+  font-size: 1rem;
+}
+
+h6 {
+  font-size: 0.875rem;
+}
+
+.text-mono {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+}
+
+.text-financial {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+/* =============================================
+   Glassmorphic Card
+   ============================================= */
+
+.card {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--backdrop-blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+}
+
+.card-elevated {
+  box-shadow: var(--shadow-md);
+}
+
+.card-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+/* =============================================
+   Risk Indicators
+   ============================================= */
+
+.risk-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.75rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.risk-low {
+  background: hsl(var(--color-risk-low) / 0.15);
+  color: hsl(var(--color-risk-low));
+  border: 1px solid hsl(var(--color-risk-low) / 0.3);
+}
+
+.risk-medium {
+  background: hsl(var(--color-risk-medium) / 0.15);
+  color: hsl(var(--color-risk-medium));
+  border: 1px solid hsl(var(--color-risk-medium) / 0.3);
+}
+
+.risk-high {
+  background: hsl(var(--color-risk-high) / 0.15);
+  color: hsl(var(--color-risk-high));
+  border: 1px solid hsl(var(--color-risk-high) / 0.3);
+}
+
+.risk-critical {
+  background: hsl(var(--color-risk-critical) / 0.15);
+  color: hsl(var(--color-risk-critical));
+  border: 1px solid hsl(var(--color-risk-critical) / 0.3);
+  animation: pulse-critical 2s ease-in-out infinite;
+}
+
+@keyframes pulse-critical {
+
+  0%,
+  100% {
+    opacity: 1;
   }
+
   50% {
-    background-position: 100% 50%;
+    opacity: 0.7;
   }
 }
 
-.gradient-border {
+/* =============================================
+   Probability Display
+   ============================================= */
+
+.prob-value {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 0.5rem 1rem;
+  background: hsl(var(--surface-2));
+  border-radius: var(--radius-md);
+}
+
+.prob-value-main {
+  font-size: 1.5rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.prob-value-label {
+  font-size: 0.7rem;
+  color: hsl(var(--text-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* =============================================
+   Scenario Table (P10/P50/P90)
+   ============================================= */
+
+.scenario-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.scenario-table th {
+  padding: 0.75rem 1rem;
+  background: hsl(var(--surface-2));
+  color: hsl(var(--text-secondary));
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  text-align: left;
+}
+
+.scenario-table th:first-child {
+  border-radius: var(--radius-md) 0 0 0;
+}
+
+.scenario-table th:last-child {
+  border-radius: 0 var(--radius-md) 0 0;
+}
+
+.scenario-table td {
+  padding: 0.875rem 1rem;
+  border-bottom: 1px solid hsl(var(--border-subtle));
+  font-variant-numeric: tabular-nums;
+}
+
+.scenario-table .col-p10 {
+  color: hsl(var(--color-risk-high));
+  font-weight: 500;
+}
+
+.scenario-table .col-p50 {
+  color: hsl(var(--text-primary));
+  font-weight: 600;
+}
+
+.scenario-table .col-p90 {
+  color: hsl(var(--color-risk-low));
+  font-weight: 500;
+}
+
+/* =============================================
+   Buttons
+   ============================================= */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.625rem 1.25rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  border: none;
+  outline: none;
+}
+
+.btn:focus-visible {
+  outline: 2px solid hsl(var(--color-primary));
+  outline-offset: 2px;
+}
+
+.btn-primary {
+  background: hsl(var(--color-primary));
+  color: white;
+}
+
+.btn-primary:hover {
+  background: hsl(var(--color-primary-light));
+}
+
+.btn-secondary {
+  background: hsl(var(--surface-3));
+  color: hsl(var(--text-primary));
+  border: 1px solid hsl(var(--border-default));
+}
+
+.btn-secondary:hover {
+  background: hsl(var(--surface-4));
+}
+
+.btn-danger {
+  background: hsl(var(--color-risk-critical) / 0.15);
+  color: hsl(var(--color-risk-critical));
+  border: 1px solid hsl(var(--color-risk-critical) / 0.3);
+}
+
+.btn-danger:hover {
+  background: hsl(var(--color-risk-critical) / 0.25);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: hsl(var(--text-secondary));
+}
+
+.btn-ghost:hover {
+  background: hsl(var(--surface-2));
+  color: hsl(var(--text-primary));
+}
+
+.btn-icon {
+  padding: 0.5rem;
+  border-radius: var(--radius-sm);
+}
+
+/* =============================================
+   Form Inputs
+   ============================================= */
+
+.input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  background: hsl(var(--surface-2));
+  border: 1px solid hsl(var(--border-default));
+  border-radius: var(--radius-md);
+  color: hsl(var(--text-primary));
+  font-size: 0.875rem;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.input:focus {
+  outline: none;
+  border-color: hsl(var(--color-primary));
+  box-shadow: 0 0 0 3px hsl(var(--color-primary) / 0.15);
+}
+
+.input::placeholder {
+  color: hsl(var(--text-muted));
+}
+
+.input-label {
+  display: block;
+  margin-bottom: 0.375rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: hsl(var(--text-secondary));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.input-help {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: hsl(var(--text-muted));
+}
+
+.input-error {
+  border-color: hsl(var(--color-risk-critical));
+}
+
+.input-error-message {
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: hsl(var(--color-risk-critical));
+}
+
+/* =============================================
+   Slider (for correlation input)
+   ============================================= */
+
+.slider {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 6px;
+  background: hsl(var(--surface-3));
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: hsl(var(--color-primary));
+  border-radius: 50%;
+  cursor: grab;
+  transition: transform 0.15s ease;
+}
+
+.slider::-webkit-slider-thumb:hover {
+  transform: scale(1.15);
+}
+
+.slider::-webkit-slider-thumb:active {
+  cursor: grabbing;
+}
+
+.slider-track-negative {
+  background: linear-gradient(to right,
+      hsl(var(--color-risk-critical)),
+      hsl(var(--surface-3)) 50%,
+      hsl(var(--color-risk-low)));
+}
+
+/* =============================================
+   Tooltips
+   ============================================= */
+
+.tooltip {
   position: relative;
 }
 
-.gradient-border::before {
-  content: '';
+.tooltip-content {
   position: absolute;
-  inset: -1px;
-  background: linear-gradient(90deg, #3b82f6, #8b5cf6, #3b82f6);
+  z-index: 100;
+  padding: 0.5rem 0.75rem;
+  background: hsl(var(--surface-4));
+  border: 1px solid hsl(var(--border-default));
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  color: hsl(var(--text-primary));
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.tooltip:hover .tooltip-content {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* =============================================
+   Charts & Visualization
+   ============================================= */
+
+.chart-container {
+  position: relative;
+  width: 100%;
+  height: 300px;
+}
+
+/* Fan chart gradient backgrounds */
+.fan-chart-gradient-90 {
+  fill: hsl(var(--color-primary) / 0.1);
+}
+
+.fan-chart-gradient-75 {
+  fill: hsl(var(--color-primary) / 0.2);
+}
+
+.fan-chart-gradient-50 {
+  fill: hsl(var(--color-primary) / 0.35);
+}
+
+.fan-chart-median {
+  stroke: hsl(var(--color-primary));
+  stroke-width: 2;
+  fill: none;
+}
+
+/* Histogram bars */
+.histogram-bar {
+  fill: hsl(var(--color-primary) / 0.6);
+  transition: fill 0.15s ease;
+}
+
+.histogram-bar:hover {
+  fill: hsl(var(--color-primary));
+}
+
+.histogram-bar-tail {
+  fill: hsl(var(--color-risk-high) / 0.6);
+}
+
+/* =============================================
+   Correlation Heatmap
+   ============================================= */
+
+.heatmap-cell {
+  transition: opacity 0.15s ease;
+}
+
+.heatmap-cell:hover {
+  opacity: 0.85;
+}
+
+.correlation-positive {
+  fill: hsl(var(--color-risk-low));
+}
+
+.correlation-negative {
+  fill: hsl(var(--color-risk-critical));
+}
+
+.correlation-neutral {
+  fill: hsl(var(--surface-3));
+}
+
+/* =============================================
+   Loading States
+   ============================================= */
+
+.skeleton {
+  background: linear-gradient(90deg,
+      hsl(var(--surface-2)),
+      hsl(var(--surface-3)),
+      hsl(var(--surface-2)));
   background-size: 200% 100%;
-  animation: gradient-shift 3s ease infinite;
-  border-radius: inherit;
-  z-index: -1;
-  opacity: 0.5;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: var(--radius-sm);
 }
 
-/* Floating animation */
-@keyframes float {
-  0%, 100% {
-    transform: translateY(0);
+@keyframes skeleton-shimmer {
+  0% {
+    background-position: 200% 0;
   }
-  50% {
-    transform: translateY(-10px);
+
+  100% {
+    background-position: -200% 0;
   }
 }
 
-.animate-float {
-  animation: float 6s ease-in-out infinite;
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid hsl(var(--surface-3));
+  border-top-color: hsl(var(--color-primary));
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
 }
 
-/* Glow effect */
-.glow {
-  box-shadow: 
-    0 0 20px rgba(59, 130, 246, 0.3),
-    0 0 40px rgba(59, 130, 246, 0.1);
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
 
-/* Custom scrollbar */
+/* =============================================
+   Scrollbar
+   ============================================= */
+
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;
 }
 
 ::-webkit-scrollbar-track {
-  background: var(--background);
+  background: hsl(var(--surface-1));
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--surface-light);
+  background: hsl(var(--surface-4));
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: hsl(var(--text-muted));
 }
 
-/* Selection */
-::selection {
-  background: rgba(59, 130, 246, 0.3);
-  color: white;
+/* =============================================
+   Utility Classes
+   ============================================= */
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fade-in {
+  animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+.slide-up {
+  animation: slideUp 0.3s ease;
+}
+
+@keyframes slideUp {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
