@@ -2,13 +2,117 @@
 
 // =============================================
 // StochFin - DCF Valuation Dashboard
-// Real data only - with source badges
+// Real data only - with source badges + Monte Carlo
 // =============================================
 
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { SourceBadge, ValueWithSource, EmptyDataState } from '@/components/ui/SourceBadge';
+import { SourceBadge, ValueWithSource } from '@/components/ui/SourceBadge';
 import type { CompanyFinancials } from '@/types/valuation';
+
+// =============================================
+// Types
+// =============================================
+
+interface SimulationResult {
+    n_scenarios: number;
+    enterprise_value: ValueStats;
+    equity_value: ValueStats;
+    per_share: ValueStats;
+    terminal_value_pct: number;
+    histogram: { bin_start: number; bin_end: number; count: number }[];
+}
+
+interface ValueStats {
+    mean: number;
+    median: number;
+    std: number;
+    p5: number;
+    p10: number;
+    p25: number;
+    p50: number;
+    p75: number;
+    p90: number;
+    p95: number;
+}
+
+// =============================================
+// Histogram Component
+// =============================================
+
+function Histogram({
+    data,
+    marketPrice,
+    median
+}: {
+    data: { bin_start: number; bin_end: number; count: number }[];
+    marketPrice?: number;
+    median: number;
+}) {
+    const maxCount = Math.max(...data.map(d => d.count));
+    const minValue = data[0]?.bin_start || 0;
+    const maxValue = data[data.length - 1]?.bin_end || 100;
+
+    return (
+        <div className="relative h-48 mt-4">
+            <div className="flex items-end h-40 gap-[1px]">
+                {data.map((bin, idx) => {
+                    const height = (bin.count / maxCount) * 100;
+                    const isAboveMarket = marketPrice && bin.bin_start >= marketPrice;
+
+                    return (
+                        <div
+                            key={idx}
+                            className="flex-1 rounded-t transition-colors"
+                            style={{
+                                height: `${height}%`,
+                                background: isAboveMarket
+                                    ? 'linear-gradient(to top, #10B981, #059669)'
+                                    : 'linear-gradient(to top, #8B5CF6, #6366F1)'
+                            }}
+                            title={`$${bin.bin_start.toFixed(0)} - $${bin.bin_end.toFixed(0)}: ${bin.count} scenarios`}
+                        />
+                    );
+                })}
+            </div>
+
+            {/* X-axis labels */}
+            <div className="flex justify-between mt-2 text-xs text-gray-500 font-mono">
+                <span>${minValue.toFixed(0)}</span>
+                <span>Wartość / akcję</span>
+                <span>${maxValue.toFixed(0)}</span>
+            </div>
+
+            {/* Market price line */}
+            {marketPrice && marketPrice >= minValue && marketPrice <= maxValue && (
+                <div
+                    className="absolute top-0 h-40 w-px bg-rose-500"
+                    style={{
+                        left: `${((marketPrice - minValue) / (maxValue - minValue)) * 100}%`
+                    }}
+                >
+                    <div className="absolute -top-6 left-1/2 -translate-x-1/2 bg-rose-500/20 border border-rose-500/30 px-2 py-0.5 rounded text-xs text-rose-400 whitespace-nowrap">
+                        Rynek ${marketPrice.toFixed(0)}
+                    </div>
+                </div>
+            )}
+
+            {/* Median line */}
+            {median >= minValue && median <= maxValue && (
+                <div
+                    className="absolute top-0 h-40 w-px bg-emerald-500 border-dashed"
+                    style={{
+                        left: `${((median - minValue) / (maxValue - minValue)) * 100}%`
+                    }}
+                >
+                    <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 text-xs text-emerald-400 whitespace-nowrap">
+                        Mediana ${median.toFixed(0)}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
 
 // =============================================
 // DCF Dashboard Page
@@ -19,17 +123,44 @@ export default function DCFDashboardPage() {
     const [data, setData] = useState<CompanyFinancials | null>(null);
     const [loading, setLoading] = useState(true);
     const [assumptions, setAssumptions] = useState({
-        revenue_growth: { mean: 5, std: 3 },
-        ebitda_margin: { mean: 30, std: 5 },
-        wacc: { mean: 9, std: 1 },
-        terminal_growth: { mean: 2.5, std: 0.5 }
+        revenue_growth: { type: 'normal', mean: 5, std: 3 },
+        ebitda_margin: { type: 'normal', mean: 30, std: 5 },
+        capex_to_revenue: { type: 'normal', mean: 3, std: 1 },
+        nwc_to_revenue_delta: { type: 'normal', mean: 5, std: 2 },
+        wacc: { type: 'normal', mean: 9, std: 1 },
+        terminal_growth: { type: 'normal', mean: 2.5, std: 0.5 }
     });
     const [simulating, setSimulating] = useState(false);
+    const [result, setResult] = useState<SimulationResult | null>(null);
 
     useEffect(() => {
         const stored = localStorage.getItem('stochfin_company_data');
         if (stored) {
-            setData(JSON.parse(stored));
+            const parsed = JSON.parse(stored);
+            setData(parsed);
+
+            // Auto-calibrate EBITDA margin from data if available
+            if (parsed.statements?.income_statement?.data) {
+                const income = parsed.statements.income_statement.data;
+                const periods = parsed.statements.income_statement.periods;
+
+                const margins: number[] = [];
+                for (const period of periods) {
+                    const rev = income.revenue?.[period];
+                    const ebitda = income.ebitda?.[period];
+                    if (rev && ebitda) {
+                        margins.push((ebitda / rev) * 100);
+                    }
+                }
+
+                if (margins.length > 0) {
+                    const meanMargin = margins.reduce((a, b) => a + b, 0) / margins.length;
+                    setAssumptions(prev => ({
+                        ...prev,
+                        ebitda_margin: { ...prev.ebitda_margin, mean: parseFloat(meanMargin.toFixed(1)) }
+                    }));
+                }
+            }
         }
         setLoading(false);
     }, []);
@@ -57,16 +188,56 @@ export default function DCFDashboardPage() {
 
             setAssumptions(prev => ({
                 ...prev,
-                revenue_growth: { mean: parseFloat(mean.toFixed(1)), std: parseFloat(std.toFixed(1)) }
+                revenue_growth: { ...prev.revenue_growth, mean: parseFloat(mean.toFixed(1)), std: parseFloat((std || 3).toFixed(1)) }
             }));
         }
     };
 
     const runSimulation = async () => {
+        if (!data) return;
+
         setSimulating(true);
-        // TODO: Integrate with Monte Carlo simulation API
-        await new Promise(r => setTimeout(r, 2000));
-        setSimulating(false);
+        setResult(null);
+
+        try {
+            // Get base year values
+            const periods = data.statements.income_statement.periods;
+            const latestPeriod = periods[0];
+            const revenue = data.statements.income_statement.data.revenue?.[latestPeriod] || 0;
+            const fcf = data.statements.cash_flow_statement?.data?.free_cash_flow?.[latestPeriod] || revenue * 0.1;
+
+            // Calculate net debt
+            const balance = data.statements.balance_sheet?.data;
+            const debt = balance?.long_term_debt?.[latestPeriod] || 0;
+            const cash = balance?.cash?.[latestPeriod] || 0;
+            const netDebt = debt - cash;
+
+            const shares = data.shares_outstanding || 1000000000;
+
+            const res = await fetch('/api/valuation/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    base_year_revenue: revenue,
+                    base_year_fcf: fcf,
+                    net_debt: netDebt,
+                    shares_outstanding: shares,
+                    forecast_years: 5,
+                    n_scenarios: 10000,
+                    assumptions
+                })
+            });
+
+            const json = await res.json();
+
+            if (json.result) {
+                setResult(json.result);
+            }
+        } catch (error) {
+            console.error('Simulation error:', error);
+        } finally {
+            setSimulating(false);
+        }
     };
 
     if (loading) {
@@ -83,7 +254,7 @@ export default function DCFDashboardPage() {
                 <p className="text-gray-400">Brak załadowanych danych</p>
                 <button
                     onClick={() => router.push('/valuation/load')}
-                    className="bg-cyan-600 hover:bg-cyan-500 px-6 py-2 rounded-lg text-sm"
+                    className="bg-cyan-600 hover:bg-cyan-500 px-6 py-2 rounded-lg text-sm text-white"
                 >
                     Załaduj dane
                 </button>
@@ -96,6 +267,11 @@ export default function DCFDashboardPage() {
     const periods = data.statements.income_statement.periods;
     const income = data.statements.income_statement.data;
     const cashFlow = data.statements.cash_flow_statement?.data || {};
+
+    // Calculate upside probability
+    const upsideProbability = result && data.current_price
+        ? (result.histogram.filter(b => b.bin_start >= data.current_price!).reduce((sum, b) => sum + b.count, 0) / result.n_scenarios) * 100
+        : null;
 
     return (
         <div className="min-h-screen bg-[#06090F] text-white">
@@ -183,7 +359,6 @@ export default function DCFDashboardPage() {
                                         </tr>
                                     </thead>
                                     <tbody className="font-mono">
-                                        {/* Revenue */}
                                         <tr className="border-b border-white/5">
                                             <td className="py-3 pr-4 text-gray-400">Revenue</td>
                                             {periods.map(period => (
@@ -196,7 +371,6 @@ export default function DCFDashboardPage() {
                                                 </td>
                                             ))}
                                         </tr>
-                                        {/* EBITDA */}
                                         <tr className="border-b border-white/5">
                                             <td className="py-3 pr-4 text-gray-400">EBITDA</td>
                                             {periods.map(period => (
@@ -209,7 +383,6 @@ export default function DCFDashboardPage() {
                                                 </td>
                                             ))}
                                         </tr>
-                                        {/* Net Income */}
                                         <tr className="border-b border-white/5">
                                             <td className="py-3 pr-4 text-gray-400">Net Income</td>
                                             {periods.map(period => (
@@ -222,7 +395,6 @@ export default function DCFDashboardPage() {
                                                 </td>
                                             ))}
                                         </tr>
-                                        {/* FCF */}
                                         <tr className="border-b border-white/5">
                                             <td className="py-3 pr-4 text-gray-400">Free Cash Flow</td>
                                             {periods.map(period => (
@@ -266,7 +438,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.revenue_growth.mean}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    revenue_growth: { ...prev.revenue_growth, mean: parseFloat(e.target.value) }
+                                                    revenue_growth: { ...prev.revenue_growth, mean: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -279,7 +451,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.revenue_growth.std}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    revenue_growth: { ...prev.revenue_growth, std: parseFloat(e.target.value) }
+                                                    revenue_growth: { ...prev.revenue_growth, std: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -301,7 +473,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.ebitda_margin.mean}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    ebitda_margin: { ...prev.ebitda_margin, mean: parseFloat(e.target.value) }
+                                                    ebitda_margin: { ...prev.ebitda_margin, mean: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -314,7 +486,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.ebitda_margin.std}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    ebitda_margin: { ...prev.ebitda_margin, std: parseFloat(e.target.value) }
+                                                    ebitda_margin: { ...prev.ebitda_margin, std: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -336,7 +508,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.wacc.mean}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    wacc: { ...prev.wacc, mean: parseFloat(e.target.value) }
+                                                    wacc: { ...prev.wacc, mean: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -349,7 +521,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.wacc.std}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    wacc: { ...prev.wacc, std: parseFloat(e.target.value) }
+                                                    wacc: { ...prev.wacc, std: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -371,7 +543,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.terminal_growth.mean}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    terminal_growth: { ...prev.terminal_growth, mean: parseFloat(e.target.value) }
+                                                    terminal_growth: { ...prev.terminal_growth, mean: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -384,7 +556,7 @@ export default function DCFDashboardPage() {
                                                 value={assumptions.terminal_growth.std}
                                                 onChange={e => setAssumptions(prev => ({
                                                     ...prev,
-                                                    terminal_growth: { ...prev.terminal_growth, std: parseFloat(e.target.value) }
+                                                    terminal_growth: { ...prev.terminal_growth, std: parseFloat(e.target.value) || 0 }
                                                 }))}
                                                 className="w-16 bg-transparent border border-white/10 rounded px-2 py-1 text-right ml-1"
                                             />
@@ -416,11 +588,94 @@ export default function DCFDashboardPage() {
                         <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
                             <h2 className="text-lg font-semibold mb-4">Wyniki Wyceny</h2>
 
-                            <div className="text-center py-12 text-gray-500">
-                                <div className="text-4xl mb-4">📊</div>
-                                <p>Uruchom symulację Monte Carlo</p>
-                                <p className="text-sm mt-1">aby zobaczyć rozkład wartości</p>
-                            </div>
+                            {!result ? (
+                                <div className="text-center py-12 text-gray-500">
+                                    <div className="text-4xl mb-4">📊</div>
+                                    <p>Uruchom symulację Monte Carlo</p>
+                                    <p className="text-sm mt-1">aby zobaczyć rozkład wartości</p>
+                                </div>
+                            ) : (
+                                <div className="space-y-6">
+                                    {/* Hero Value */}
+                                    <div className="text-center py-4">
+                                        <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">
+                                            Szacowana wartość / akcję
+                                        </div>
+                                        <div className="text-4xl font-mono font-bold text-emerald-400">
+                                            ${result.per_share.median.toFixed(2)}
+                                        </div>
+                                        <div className="text-sm text-gray-400 mt-1">
+                                            mediana z {result.n_scenarios.toLocaleString()} scenariuszy
+                                        </div>
+
+                                        {data.current_price && (
+                                            <div className={`mt-3 text-lg font-mono ${result.per_share.median > data.current_price
+                                                    ? 'text-emerald-400'
+                                                    : 'text-rose-400'
+                                                }`}>
+                                                vs rynek ${data.current_price.toFixed(2)}: {' '}
+                                                {result.per_share.median > data.current_price ? '↑ ' : '↓ '}
+                                                {(((result.per_share.median - data.current_price) / data.current_price) * 100).toFixed(1)}%
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Percentiles */}
+                                    <div className="grid grid-cols-5 gap-2 text-center text-xs">
+                                        <div className="bg-[#0A0E17] rounded p-2">
+                                            <div className="text-gray-500">P5</div>
+                                            <div className="font-mono">${result.per_share.p5.toFixed(0)}</div>
+                                        </div>
+                                        <div className="bg-[#0A0E17] rounded p-2">
+                                            <div className="text-gray-500">P25</div>
+                                            <div className="font-mono">${result.per_share.p25.toFixed(0)}</div>
+                                        </div>
+                                        <div className="bg-emerald-500/20 border border-emerald-500/30 rounded p-2">
+                                            <div className="text-emerald-400">P50</div>
+                                            <div className="font-mono text-emerald-400">${result.per_share.p50.toFixed(0)}</div>
+                                        </div>
+                                        <div className="bg-[#0A0E17] rounded p-2">
+                                            <div className="text-gray-500">P75</div>
+                                            <div className="font-mono">${result.per_share.p75.toFixed(0)}</div>
+                                        </div>
+                                        <div className="bg-[#0A0E17] rounded p-2">
+                                            <div className="text-gray-500">P95</div>
+                                            <div className="font-mono">${result.per_share.p95.toFixed(0)}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Histogram */}
+                                    <Histogram
+                                        data={result.histogram}
+                                        marketPrice={data.current_price || undefined}
+                                        median={result.per_share.median}
+                                    />
+
+                                    {/* Upside Probability */}
+                                    {upsideProbability !== null && (
+                                        <div className={`p-4 rounded-lg text-center ${upsideProbability >= 50
+                                                ? 'bg-emerald-500/10 border border-emerald-500/20'
+                                                : 'bg-rose-500/10 border border-rose-500/20'
+                                            }`}>
+                                            <div className={`text-2xl font-bold font-mono ${upsideProbability >= 50 ? 'text-emerald-400' : 'text-rose-400'
+                                                }`}>
+                                                {upsideProbability.toFixed(0)}%
+                                            </div>
+                                            <div className="text-sm text-gray-400">
+                                                scenariuszy powyżej ceny rynkowej
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Terminal Value Warning */}
+                                    {result.terminal_value_pct > 0.75 && (
+                                        <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-sm">
+                                            ⚠️ Terminal Value = {(result.terminal_value_pct * 100).toFixed(0)}% wyceny.
+                                            Wynik jest wrażliwy na założenia terminalne.
+                                        </div>
+                                    )}
+                                </div>
+                            )}
                         </div>
 
                         {/* Navigation */}
