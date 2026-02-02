@@ -453,6 +453,45 @@ export default function LoadDataPage() {
             return v * UNIT;
         };
 
+        // =============================================
+        // Auto-calculate EBITDA and EBIT when missing
+        // EBITDA = Net Income + Interest Expense + Tax + Depreciation
+        // EBIT = EBITDA - Depreciation (or Net Income + Interest + Tax)
+        // =============================================
+        const calculateEbitdaEbit = (yearData: YearData) => {
+            const netIncome = parseVal(yearData.netIncome);
+            const interest = parseVal(yearData.interestExpense);
+            const depreciation = parseVal(yearData.depreciation);
+
+            // Try to get tax from explicit field or estimate it
+            // Tax = EBT - Net Income (if we had EBT), or estimate ~20% of EBT
+            // For simplicity: Tax ≈ interest expense * 0.25 as rough estimate if not available
+            const estimatedTax = interest !== null ? Math.abs(interest) * 0.25 : 0;
+
+            let ebitda = parseVal(yearData.ebitda);
+            let ebit = parseVal(yearData.ebit);
+
+            // Auto-calculate EBIT if missing but we have net income + interest
+            if (ebit === null && netIncome !== null && interest !== null) {
+                // EBIT ≈ Net Income + |Interest Expense| + Tax
+                // Simplified: EBIT ≈ Net Income + |Interest| * 1.25 (including tax effect)
+                ebit = netIncome + Math.abs(interest) + estimatedTax;
+            }
+
+            // Auto-calculate EBITDA if missing
+            if (ebitda === null) {
+                if (ebit !== null && depreciation !== null) {
+                    // EBITDA = EBIT + Depreciation
+                    ebitda = ebit + Math.abs(depreciation);
+                } else if (netIncome !== null && interest !== null && depreciation !== null) {
+                    // EBITDA = Net Income + |Interest| + Tax + |Depreciation|
+                    ebitda = netIncome + Math.abs(interest) + estimatedTax + Math.abs(depreciation);
+                }
+            }
+
+            return { ebitda, ebit };
+        };
+
         // Save company info
         dispatch({
             type: 'SET_COMPANY_INFO',
@@ -485,15 +524,18 @@ export default function LoadDataPage() {
                 type: 'SET_FINANCIAL_DATA',
                 payload: {
                     year: yearData.year,
-                    incomeStatement: {
-                        revenue: parseVal(yearData.revenue),
-                        costOfRevenue: parseVal(yearData.costOfRevenue),
-                        ebitda: parseVal(yearData.ebitda),
-                        depreciation: parseVal(yearData.depreciation),
-                        ebit: parseVal(yearData.ebit),
-                        interestExpense: parseVal(yearData.interestExpense),
-                        netIncome: parseVal(yearData.netIncome)
-                    },
+                    incomeStatement: (() => {
+                        const { ebitda, ebit } = calculateEbitdaEbit(yearData);
+                        return {
+                            revenue: parseVal(yearData.revenue),
+                            costOfRevenue: parseVal(yearData.costOfRevenue),
+                            ebitda,  // Auto-calculated if missing
+                            depreciation: parseVal(yearData.depreciation),
+                            ebit,    // Auto-calculated if missing
+                            interestExpense: parseVal(yearData.interestExpense),
+                            netIncome: parseVal(yearData.netIncome)
+                        };
+                    })(),
                     balanceSheet: {
                         totalAssets: parseVal(yearData.totalAssets),
                         currentAssets: parseVal(yearData.currentAssets),
