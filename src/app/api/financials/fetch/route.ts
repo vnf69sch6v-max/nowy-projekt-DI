@@ -60,23 +60,22 @@ async function fetchFromFMP(ticker: string): Promise<CompanyFinancials> {
         throw new Error('FMP_API_KEY not configured. Add it to your .env file.');
     }
 
-    const baseUrl = 'https://financialmodelingprep.com/api/v3';
+    // New stable API base URL (v3 endpoints are deprecated)
+    const baseUrl = 'https://financialmodelingprep.com/stable';
 
-    // Parallel fetch all endpoints
+    // Parallel fetch all endpoints - using new query param format
     const [
         profileRes,
         incomeRes,
         balanceRes,
         cashFlowRes,
-        metricsRes,
         quoteRes
     ] = await Promise.all([
-        fetch(`${baseUrl}/profile/${ticker}?apikey=${apiKey}`),
-        fetch(`${baseUrl}/income-statement/${ticker}?period=annual&limit=5&apikey=${apiKey}`),
-        fetch(`${baseUrl}/balance-sheet-statement/${ticker}?period=annual&limit=5&apikey=${apiKey}`),
-        fetch(`${baseUrl}/cash-flow-statement/${ticker}?period=annual&limit=5&apikey=${apiKey}`),
-        fetch(`${baseUrl}/key-metrics/${ticker}?period=annual&limit=5&apikey=${apiKey}`),
-        fetch(`${baseUrl}/quote/${ticker}?apikey=${apiKey}`)
+        fetch(`${baseUrl}/profile?symbol=${ticker}&apikey=${apiKey}`),
+        fetch(`${baseUrl}/income-statement?symbol=${ticker}&period=annual&limit=5&apikey=${apiKey}`),
+        fetch(`${baseUrl}/balance-sheet-statement?symbol=${ticker}&period=annual&limit=5&apikey=${apiKey}`),
+        fetch(`${baseUrl}/cash-flow-statement?symbol=${ticker}&period=annual&limit=5&apikey=${apiKey}`),
+        fetch(`${baseUrl}/quote?symbol=${ticker}&apikey=${apiKey}`)
     ]);
 
     // Check for API errors
@@ -88,12 +87,11 @@ async function fetchFromFMP(ticker: string): Promise<CompanyFinancials> {
         throw new Error(`FMP API error: ${errorText}`);
     }
 
-    const [profile, income, balance, cashFlow, metrics, quote] = await Promise.all([
+    const [profile, income, balance, cashFlow, quote] = await Promise.all([
         profileRes.json(),
         incomeRes.json(),
         balanceRes.json(),
         cashFlowRes.json(),
-        metricsRes.json(),
         quoteRes.json()
     ]);
 
@@ -104,7 +102,8 @@ async function fetchFromFMP(ticker: string): Promise<CompanyFinancials> {
 
     const company = profile[0];
     const latestQuote = quote[0] || {};
-    const latestMetrics = metrics[0] || {};
+    // key-metrics endpoint deprecated, use profile data for metrics
+    const latestMetrics: Record<string, number | null> = {};
 
     // Extract periods (years)
     const periods = income.map((item: any) => {
