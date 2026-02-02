@@ -1,475 +1,614 @@
 'use client';
 
 // =============================================
-// StochFin — Peer Benchmark (Spider Chart + Ranking)
+// StochFin — Comparable Analysis (Benchmark)
+// Based on MASTER_PROMPTS v3 specification
+// Peer group management + implied valuations
 // =============================================
 
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { SourceBadge } from '@/components/ui/SourceBadge';
-import type { CompanyFinancials } from '@/types/valuation';
+import {
+    useCompanyData,
+    getField,
+    getLatestYear,
+    safeDivide,
+    formatNumber,
+    formatMultiple
+} from '@/contexts/CompanyDataContext';
+import EmptyState from '@/components/ui/EmptyState';
 
 // =============================================
-// Spider Chart Component (SVG Radar)
+// Types
 // =============================================
 
-interface SpiderMetric {
-    label: string;
-    value: number;
-    benchmark: number;
-    unit: string;
+interface Peer {
+    id: string;
+    name: string;
+    ticker: string;
+    revenue: number;
+    ebitda: number;
+    netIncome: number;
+    marketCap: number;
+    netDebt: number;
+    ev: number;
+    pe: number | null;
+    evEbitda: number | null;
+    evRevenue: number | null;
 }
 
-function SpiderChart({
-    metrics,
-    companyName
+// =============================================
+// Glass Card Component
+// =============================================
+
+function GlassCard({
+    children,
+    className = '',
+    glowColor = 'cyan'
 }: {
-    metrics: SpiderMetric[];
-    companyName: string;
+    children: React.ReactNode;
+    className?: string;
+    glowColor?: 'emerald' | 'cyan' | 'purple' | 'amber';
 }) {
-    const n = metrics.length;
-    const centerX = 200;
-    const centerY = 200;
-    const maxRadius = 150;
-
-    // Convert polar to cartesian
-    const polarToCartesian = (angle: number, radius: number) => {
-        const rad = (angle - 90) * (Math.PI / 180);
-        return {
-            x: centerX + radius * Math.cos(rad),
-            y: centerY + radius * Math.sin(rad)
-        };
+    const glowMap = {
+        emerald: 'hover:shadow-emerald-500/20',
+        cyan: 'hover:shadow-cyan-500/20',
+        purple: 'hover:shadow-purple-500/20',
+        amber: 'hover:shadow-amber-500/20'
     };
-
-    // Get points for polygon
-    const getPolygonPoints = (values: number[], maxValues: number[]) => {
-        return values.map((val, i) => {
-            const angle = (360 / n) * i;
-            const ratio = Math.min(val / (maxValues[i] || 1), 1.5); // Cap at 150%
-            const r = (ratio / 1.5) * maxRadius;
-            const point = polarToCartesian(angle, r);
-            return `${point.x},${point.y}`;
-        }).join(' ');
-    };
-
-    const companyValues = metrics.map(m => m.value);
-    const benchmarkValues = metrics.map(m => m.benchmark);
-    const maxValues = metrics.map(m => Math.max(m.value, m.benchmark) * 1.2);
 
     return (
-        <div className="relative">
-            <svg viewBox="0 0 400 400" className="w-full max-w-md mx-auto">
-                {/* Background circles */}
-                {[0.25, 0.5, 0.75, 1].map((ratio, i) => (
-                    <circle
-                        key={i}
-                        cx={centerX}
-                        cy={centerY}
-                        r={maxRadius * ratio}
-                        fill="none"
-                        stroke="#1F2937"
-                        strokeWidth="1"
-                    />
-                ))}
-
-                {/* Axis lines */}
-                {metrics.map((_, i) => {
-                    const angle = (360 / n) * i;
-                    const end = polarToCartesian(angle, maxRadius);
-                    return (
-                        <line
-                            key={i}
-                            x1={centerX}
-                            y1={centerY}
-                            x2={end.x}
-                            y2={end.y}
-                            stroke="#374151"
-                            strokeWidth="1"
-                        />
-                    );
-                })}
-
-                {/* Benchmark polygon (gray) */}
-                <polygon
-                    points={getPolygonPoints(benchmarkValues, maxValues)}
-                    fill="rgba(156,163,175,0.2)"
-                    stroke="#9CA3AF"
-                    strokeWidth="2"
-                    strokeDasharray="5,5"
-                />
-
-                {/* Company polygon (green) */}
-                <polygon
-                    points={getPolygonPoints(companyValues, maxValues)}
-                    fill="rgba(16,185,129,0.3)"
-                    stroke="#10B981"
-                    strokeWidth="3"
-                />
-
-                {/* Data points */}
-                {companyValues.map((val, i) => {
-                    const angle = (360 / n) * i;
-                    const ratio = Math.min(val / (maxValues[i] || 1), 1.5);
-                    const r = (ratio / 1.5) * maxRadius;
-                    const point = polarToCartesian(angle, r);
-                    return (
-                        <circle
-                            key={i}
-                            cx={point.x}
-                            cy={point.y}
-                            r="6"
-                            fill="#10B981"
-                            stroke="#06090F"
-                            strokeWidth="2"
-                        />
-                    );
-                })}
-
-                {/* Labels */}
-                {metrics.map((m, i) => {
-                    const angle = (360 / n) * i;
-                    const point = polarToCartesian(angle, maxRadius + 30);
-                    return (
-                        <text
-                            key={i}
-                            x={point.x}
-                            y={point.y}
-                            textAnchor="middle"
-                            dominantBaseline="middle"
-                            className="fill-gray-300 text-xs font-medium"
-                        >
-                            {m.label}
-                        </text>
-                    );
-                })}
-            </svg>
-
-            {/* Legend */}
-            <div className="flex justify-center gap-6 mt-4 text-sm">
-                <div className="flex items-center gap-2">
-                    <div className="w-4 h-1 bg-emerald-500 rounded" />
-                    <span className="text-gray-300">{companyName}</span>
-                </div>
-                <div className="flex items-center gap-2">
-                    <div className="w-4 h-1 bg-gray-500 rounded border-dashed" style={{ borderTop: '2px dashed' }} />
-                    <span className="text-gray-500">Benchmark sektora</span>
-                </div>
-            </div>
+        <div className={`
+            relative overflow-hidden rounded-2xl
+            bg-gradient-to-br from-white/[0.08] to-white/[0.02]
+            backdrop-blur-xl border border-white/[0.08]
+            shadow-xl shadow-black/20 transition-all duration-300
+            hover:border-white/20 hover:shadow-2xl ${glowMap[glowColor]}
+            ${className}
+        `}>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
+            <div className="relative z-10">{children}</div>
         </div>
     );
 }
 
 // =============================================
-// Ranking Table Component
+// Median calculation helper
 // =============================================
 
-interface RankingItem {
-    metric: string;
-    company: number;
-    sectorMedian: number;
-    percentile: number;
-    unit: string;
-}
-
-function RankingTable({ items }: { items: RankingItem[] }) {
-    const getPercentileColor = (p: number) => {
-        if (p >= 75) return 'text-emerald-400';
-        if (p >= 50) return 'text-cyan-400';
-        if (p >= 25) return 'text-amber-400';
-        return 'text-rose-400';
-    };
-
-    const getPercentileBar = (p: number) => {
-        if (p >= 75) return 'bg-emerald-500';
-        if (p >= 50) return 'bg-cyan-500';
-        if (p >= 25) return 'bg-amber-500';
-        return 'bg-rose-500';
-    };
-
-    return (
-        <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-                <thead>
-                    <tr className="text-gray-500 text-xs uppercase tracking-wider border-b border-white/10">
-                        <th className="text-left py-3 px-2">Wskaźnik</th>
-                        <th className="text-right py-3 px-2">Spółka</th>
-                        <th className="text-right py-3 px-2">Mediana sektora</th>
-                        <th className="text-right py-3 px-2">Percentyl</th>
-                        <th className="py-3 px-2 w-24"></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {items.map((item, idx) => (
-                        <tr key={idx} className="border-b border-white/5 hover:bg-white/5 transition-colors">
-                            <td className="py-3 px-2 font-medium">{item.metric}</td>
-                            <td className="py-3 px-2 text-right font-mono">
-                                {item.company.toFixed(1)}{item.unit}
-                            </td>
-                            <td className="py-3 px-2 text-right font-mono text-gray-500">
-                                {item.sectorMedian.toFixed(1)}{item.unit}
-                            </td>
-                            <td className={`py-3 px-2 text-right font-mono font-bold ${getPercentileColor(item.percentile)}`}>
-                                P{item.percentile}
-                            </td>
-                            <td className="py-3 px-2">
-                                <div className="h-2 bg-gray-800 rounded overflow-hidden">
-                                    <div
-                                        className={`h-full ${getPercentileBar(item.percentile)} transition-all`}
-                                        style={{ width: `${item.percentile}%` }}
-                                    />
-                                </div>
-                            </td>
-                        </tr>
-                    ))}
-                </tbody>
-            </table>
-        </div>
-    );
+function median(arr: (number | null)[]): number | null {
+    const sorted = arr.filter((x): x is number => x !== null).sort((a, b) => a - b);
+    if (sorted.length === 0) return null;
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
 }
 
 // =============================================
-// Main Page
+// Add Peer Modal
 // =============================================
 
-export default function PeerBenchmarkPage() {
-    const router = useRouter();
-    const [data, setData] = useState<CompanyFinancials | null>(null);
-    const [loading, setLoading] = useState(true);
+function AddPeerModal({
+    isOpen,
+    onClose,
+    onAdd,
+    initialTicker = ''
+}: {
+    isOpen: boolean;
+    onClose: () => void;
+    onAdd: (peer: Peer) => void;
+    initialTicker?: string;
+}) {
+    const [name, setName] = useState('');
+    const [ticker, setTicker] = useState(initialTicker);
+    const [revenue, setRevenue] = useState('');
+    const [ebitda, setEbitda] = useState('');
+    const [netIncome, setNetIncome] = useState('');
+    const [marketCap, setMarketCap] = useState('');
+    const [netDebt, setNetDebt] = useState('');
 
-    useEffect(() => {
-        const stored = localStorage.getItem('stochfin_company_data');
-        if (stored) {
-            setData(JSON.parse(stored));
-        }
-        setLoading(false);
-    }, []);
+    const handleSubmit = () => {
+        const revVal = parseFloat(revenue) || 0;
+        const ebitdaVal = parseFloat(ebitda) || 0;
+        const netIncVal = parseFloat(netIncome) || 0;
+        const mcVal = parseFloat(marketCap) || 0;
+        const ndVal = parseFloat(netDebt) || 0;
 
-    // Calculate peer benchmark metrics
-    const benchmarkData = useMemo(() => {
-        if (!data) return null;
+        const ev = mcVal + ndVal;
 
-        const periods = data.statements?.income_statement?.periods || [];
-        const income = data.statements?.income_statement?.data || {};
-        const balance = data.statements?.balance_sheet?.data || {};
-        const cashflow = data.statements?.cash_flow_statement?.data || {};
-
-        const latestPeriod = periods[0];
-
-        // Get company values
-        const revenue = income.revenue?.[latestPeriod] || 0;
-        const grossProfit = income.gross_profit?.[latestPeriod] || 0;
-        const ebitda = income.ebitda?.[latestPeriod] || (income.operating_income?.[latestPeriod] || 0) * 1.15;
-        const netIncome = income.net_income?.[latestPeriod] || 0;
-        const totalAssets = balance.total_assets?.[latestPeriod] || 1;
-        const totalEquity = balance.total_equity?.[latestPeriod] || 1;
-        const totalDebt = (balance.long_term_debt?.[latestPeriod] || 0) + (balance.short_term_debt?.[latestPeriod] || 0);
-        const ocf = cashflow.operating_cash_flow?.[latestPeriod] || 0;
-
-        // Calculate ratios
-        const grossMargin = revenue > 0 ? (grossProfit / revenue) * 100 : 0;
-        const ebitdaMargin = revenue > 0 ? (ebitda / revenue) * 100 : 0;
-        const netMargin = revenue > 0 ? (netIncome / revenue) * 100 : 0;
-        const roe = totalEquity > 0 ? (netIncome / totalEquity) * 100 : 0;
-        const roa = totalAssets > 0 ? (netIncome / totalAssets) * 100 : 0;
-        const debtToEquity = totalEquity > 0 ? totalDebt / totalEquity : 0;
-
-        // Sector benchmarks (example: Tech sector medians)
-        const sectorBenchmarks = {
-            grossMargin: 45,
-            ebitdaMargin: 25,
-            netMargin: 15,
-            roe: 20,
-            roa: 10,
-            debtToEquity: 0.8
+        const peer: Peer = {
+            id: Date.now().toString(),
+            name: name || ticker.toUpperCase(),
+            ticker: ticker.toUpperCase(),
+            revenue: revVal * 1_000_000,
+            ebitda: ebitdaVal * 1_000_000,
+            netIncome: netIncVal * 1_000_000,
+            marketCap: mcVal * 1_000_000,
+            netDebt: ndVal * 1_000_000,
+            ev: ev * 1_000_000,
+            pe: safeDivide(mcVal, netIncVal),
+            evEbitda: safeDivide(ev, ebitdaVal),
+            evRevenue: safeDivide(ev, revVal)
         };
 
-        // Spider chart data
-        const spiderMetrics: SpiderMetric[] = [
-            { label: 'Marża brutto', value: grossMargin, benchmark: sectorBenchmarks.grossMargin, unit: '%' },
-            { label: 'Marża EBITDA', value: ebitdaMargin, benchmark: sectorBenchmarks.ebitdaMargin, unit: '%' },
-            { label: 'Marża netto', value: netMargin, benchmark: sectorBenchmarks.netMargin, unit: '%' },
-            { label: 'ROE', value: roe, benchmark: sectorBenchmarks.roe, unit: '%' },
-            { label: 'ROA', value: roa, benchmark: sectorBenchmarks.roa, unit: '%' },
-            { label: 'Dług/Kapitał', value: debtToEquity * 10, benchmark: sectorBenchmarks.debtToEquity * 10, unit: '' }, // Scaled for visibility
-        ];
+        onAdd(peer);
+        onClose();
 
-        // Calculate percentiles (simplified - based on benchmark comparison)
-        const calculatePercentile = (value: number, benchmark: number, higherBetter: boolean = true) => {
-            const ratio = value / benchmark;
-            if (higherBetter) {
-                if (ratio >= 1.5) return 90;
-                if (ratio >= 1.2) return 75;
-                if (ratio >= 1.0) return 60;
-                if (ratio >= 0.8) return 40;
-                if (ratio >= 0.5) return 25;
-                return 10;
-            } else {
-                if (ratio <= 0.5) return 90;
-                if (ratio <= 0.8) return 75;
-                if (ratio <= 1.0) return 60;
-                if (ratio <= 1.2) return 40;
-                if (ratio <= 1.5) return 25;
-                return 10;
-            }
-        };
+        // Reset form
+        setName('');
+        setTicker('');
+        setRevenue('');
+        setEbitda('');
+        setNetIncome('');
+        setMarketCap('');
+        setNetDebt('');
+    };
 
-        // Ranking table data
-        const rankingItems: RankingItem[] = [
-            { metric: 'Marża brutto', company: grossMargin, sectorMedian: sectorBenchmarks.grossMargin, percentile: calculatePercentile(grossMargin, sectorBenchmarks.grossMargin), unit: '%' },
-            { metric: 'Marża EBITDA', company: ebitdaMargin, sectorMedian: sectorBenchmarks.ebitdaMargin, percentile: calculatePercentile(ebitdaMargin, sectorBenchmarks.ebitdaMargin), unit: '%' },
-            { metric: 'Marża netto', company: netMargin, sectorMedian: sectorBenchmarks.netMargin, percentile: calculatePercentile(netMargin, sectorBenchmarks.netMargin), unit: '%' },
-            { metric: 'ROE', company: roe, sectorMedian: sectorBenchmarks.roe, percentile: calculatePercentile(roe, sectorBenchmarks.roe), unit: '%' },
-            { metric: 'ROA', company: roa, sectorMedian: sectorBenchmarks.roa, percentile: calculatePercentile(roa, sectorBenchmarks.roa), unit: '%' },
-            { metric: 'Dług/Kapitał', company: debtToEquity, sectorMedian: sectorBenchmarks.debtToEquity, percentile: calculatePercentile(debtToEquity, sectorBenchmarks.debtToEquity, false), unit: 'x' },
-        ];
-
-        // Overall score
-        const avgPercentile = Math.round(rankingItems.reduce((sum, r) => sum + r.percentile, 0) / rankingItems.length);
-
-        return {
-            spiderMetrics,
-            rankingItems,
-            avgPercentile
-        };
-    }, [data]);
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Ładowanie...</div>
-            </div>
-        );
-    }
-
-    if (!data) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex flex-col items-center justify-center gap-4 text-white">
-                <div className="text-5xl mb-4">🎯</div>
-                <p className="text-gray-400">Brak załadowanych danych</p>
-                <button onClick={() => router.push('/valuation/load')} className="bg-cyan-600 px-6 py-2 rounded-lg text-sm">
-                    Załaduj dane
-                </button>
-            </div>
-        );
-    }
-
-    const sourceType = data.source === 'fmp' || data.source === 'alpha_vantage' ? 'api' : 'pdf';
+    if (!isOpen) return null;
 
     return (
-        <div className="min-h-screen bg-[#06090F] text-white">
-            {/* Header */}
-            <header className="border-b border-white/5 bg-[#0A0E17]">
-                <div className="max-w-7xl mx-auto px-8 py-6">
-                    <button onClick={() => router.push('/valuation/health')} className="text-gray-500 hover:text-white text-sm mb-2">
-                        ← Powrót do Health Check
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+            <div className="bg-gray-900 rounded-2xl border border-white/10 p-6 w-full max-w-md">
+                <h3 className="text-lg font-semibold mb-4">Dodaj spółkę porównawczą</h3>
+
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">Nazwa</label>
+                            <input
+                                type="text"
+                                value={name}
+                                onChange={(e) => setName(e.target.value)}
+                                placeholder="Microsoft Corp."
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">Ticker</label>
+                            <input
+                                type="text"
+                                value={ticker}
+                                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                                placeholder="MSFT"
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">Revenue (mln)</label>
+                            <input
+                                type="number"
+                                value={revenue}
+                                onChange={(e) => setRevenue(e.target.value)}
+                                placeholder="245,122"
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">EBITDA (mln)</label>
+                            <input
+                                type="number"
+                                value={ebitda}
+                                onChange={(e) => setEbitda(e.target.value)}
+                                placeholder="125,447"
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">Net Income (mln)</label>
+                            <input
+                                type="number"
+                                value={netIncome}
+                                onChange={(e) => setNetIncome(e.target.value)}
+                                placeholder="72,361"
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-1">Market Cap (mln)</label>
+                            <input
+                                type="number"
+                                value={marketCap}
+                                onChange={(e) => setMarketCap(e.target.value)}
+                                placeholder="3,100,000"
+                                className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                            />
+                        </div>
+                    </div>
+
+                    <div>
+                        <label className="block text-xs text-gray-500 uppercase mb-1">Net Debt (mln)</label>
+                        <input
+                            type="number"
+                            value={netDebt}
+                            onChange={(e) => setNetDebt(e.target.value)}
+                            placeholder="12,345"
+                            className="w-full px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white"
+                        />
+                    </div>
+                </div>
+
+                <div className="flex gap-3 mt-6">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-colors"
+                    >
+                        Anuluj
                     </button>
-                    <h1 className="text-2xl font-bold font-mono">
-                        Peer Benchmark
-                        <span className="text-gray-400 ml-3">— {data.ticker}</span>
+                    <button
+                        onClick={handleSubmit}
+                        className="flex-1 py-2 rounded-lg bg-emerald-600 hover:bg-emerald-500 transition-colors font-medium"
+                    >
+                        Dodaj peera
+                    </button>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// =============================================
+// Football Field Chart
+// =============================================
+
+function FootballField({
+    methods,
+    marketPrice,
+    currency
+}: {
+    methods: { name: string; value: number | null; color: string }[];
+    marketPrice: number | null;
+    currency: string;
+}) {
+    const validMethods = methods.filter(m => m.value !== null);
+    if (validMethods.length === 0) return null;
+
+    const values = validMethods.map(m => m.value!);
+    const minVal = Math.min(...values) * 0.8;
+    const maxVal = Math.max(...values) * 1.2;
+    const range = maxVal - minVal;
+
+    return (
+        <div className="space-y-3">
+            {validMethods.map((m, i) => {
+                const pct = ((m.value! - minVal) / range) * 100;
+                return (
+                    <div key={m.name} className="flex items-center gap-4">
+                        <div className="w-24 text-right text-sm text-gray-400">{m.name}</div>
+                        <div className="flex-1 relative h-8 bg-white/5 rounded-lg">
+                            {/* Bar */}
+                            <div
+                                className="absolute top-0 h-full rounded-lg"
+                                style={{
+                                    left: '0%',
+                                    width: `${pct}%`,
+                                    background: `linear-gradient(90deg, ${m.color}40, ${m.color})`
+                                }}
+                            />
+                            {/* Value label */}
+                            <div
+                                className="absolute top-1/2 -translate-y-1/2 text-xs font-mono font-medium text-white"
+                                style={{ left: `${Math.min(pct, 90)}%`, paddingLeft: '8px' }}
+                            >
+                                {formatNumber(m.value, currency)}
+                            </div>
+                        </div>
+                    </div>
+                );
+            })}
+
+            {/* Market price line */}
+            {marketPrice !== null && marketPrice >= minVal && marketPrice <= maxVal && (
+                <div className="flex items-center gap-4 mt-4">
+                    <div className="w-24 text-right text-sm text-rose-400">Cena rynk.</div>
+                    <div className="flex-1 relative h-2">
+                        <div
+                            className="absolute top-1/2 -translate-y-1/2 w-0.5 h-6 bg-rose-500"
+                            style={{ left: `${((marketPrice - minVal) / range) * 100}%` }}
+                        />
+                        <div
+                            className="absolute -top-4 text-xs font-mono text-rose-400"
+                            style={{ left: `${((marketPrice - minVal) / range) * 100}%`, transform: 'translateX(-50%)' }}
+                        >
+                            {formatNumber(marketPrice, currency)}
+                        </div>
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// =============================================
+// Main Component
+// =============================================
+
+export default function ComparablePage() {
+    const router = useRouter();
+    const { state } = useCompanyData();
+
+    const y0 = getLatestYear(state);
+    const currency = state.currency || 'PLN';
+    const companyName = state.companyName || 'Brak danych';
+    const ticker = state.ticker || '';
+
+    const [peers, setPeers] = useState<Peer[]>([]);
+    const [tickerInput, setTickerInput] = useState('');
+    const [showModal, setShowModal] = useState(false);
+
+    // Guard: if no data loaded
+    if (!state.dataLoaded || !y0) {
+        return (
+            <div className="min-h-screen bg-[#030712] text-white">
+                <EmptyState
+                    message="Brak załadowanych danych"
+                    description="Załaduj dane spółki aby przeprowadzić analizę porównawczą"
+                    ctaText="📡 Załaduj dane"
+                    onCta={() => router.push('/valuation/load')}
+                    icon="📈"
+                />
+            </div>
+        );
+    }
+
+    // Target company data
+    const targetRevenue = getField(state, 'incomeStatement', y0, 'revenue');
+    const targetEbitda = getField(state, 'incomeStatement', y0, 'ebitda');
+    const targetNetIncome = getField(state, 'incomeStatement', y0, 'netIncome');
+    const totalDebt = getField(state, 'balanceSheet', y0, 'totalDebt')
+        || getField(state, 'balanceSheet', y0, 'longTermDebt') || 0;
+    const cash = getField(state, 'balanceSheet', y0, 'cash') || 0;
+    const targetNetDebt = totalDebt - cash;
+    const targetShares = state.market.sharesOutstanding
+        || getField(state, 'balanceSheet', y0, 'sharesOutstanding');
+
+    // Peer group medians
+    const medPE = median(peers.map(p => p.pe));
+    const medEvEbitda = median(peers.map(p => p.evEbitda));
+    const medEvRevenue = median(peers.map(p => p.evRevenue));
+
+    // Implied values
+    const impliedFromPE = (medPE !== null && targetNetIncome !== null && targetShares !== null)
+        ? (medPE * targetNetIncome) / targetShares
+        : null;
+
+    const impliedFromEvEbitda = (medEvEbitda !== null && targetEbitda !== null && targetShares !== null)
+        ? ((medEvEbitda * targetEbitda) - targetNetDebt) / targetShares
+        : null;
+
+    const impliedFromEvRev = (medEvRevenue !== null && targetRevenue !== null && targetShares !== null)
+        ? ((medEvRevenue * targetRevenue) - targetNetDebt) / targetShares
+        : null;
+
+    const handleAddPeer = (peer: Peer) => {
+        setPeers(prev => [...prev, peer]);
+    };
+
+    const handleRemovePeer = (id: string) => {
+        setPeers(prev => prev.filter(p => p.id !== id));
+    };
+
+    const handleOpenModal = () => {
+        setShowModal(true);
+    };
+
+    return (
+        <div className="min-h-screen bg-[#030712] text-white overflow-hidden">
+            {/* Animated Background */}
+            <div className="fixed inset-0 pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-cyan-500/5 rounded-full blur-[120px] animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
+            </div>
+
+            {/* Header */}
+            <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
+                <div className="max-w-7xl mx-auto px-8 py-6">
+                    <button
+                        onClick={() => router.push('/valuation/dcf')}
+                        className="text-gray-500 hover:text-white text-sm mb-2 transition-colors"
+                    >
+                        ← Powrót do DCF
+                    </button>
+                    <h1 className="text-2xl font-mono font-bold">
+                        Wycena Porównawcza — {companyName}
                     </h1>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-                        <span>Porównanie z sektorem</span>
-                        <SourceBadge type={sourceType as any} source={data.source.toUpperCase()} />
+                    <div className="text-sm text-gray-500 mt-1">
+                        {ticker && `${ticker} • `}{currency}
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-8 py-8">
-                {benchmarkData && (
-                    <>
-                        {/* Overall Score */}
-                        <div className="bg-[#111827] rounded-xl border border-white/5 p-6 mb-8 text-center">
-                            <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">Pozycja względem sektora</div>
-                            <div className={`text-5xl font-mono font-bold ${benchmarkData.avgPercentile >= 75 ? 'text-emerald-400' :
-                                    benchmarkData.avgPercentile >= 50 ? 'text-cyan-400' :
-                                        benchmarkData.avgPercentile >= 25 ? 'text-amber-400' : 'text-rose-400'
-                                }`}>
-                                P{benchmarkData.avgPercentile}
-                            </div>
-                            <div className="text-gray-500 text-sm mt-1">
-                                Średni percentyl w 6 kluczowych wskaźnikach
-                            </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-8 mb-8">
-                            {/* Spider Chart */}
-                            <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
-                                <h3 className="text-lg font-semibold mb-4 text-center">🕸️ Spider Chart</h3>
-                                <SpiderChart
-                                    metrics={benchmarkData.spiderMetrics}
-                                    companyName={data.ticker}
-                                />
-                            </div>
-
-                            {/* Interpretation */}
-                            <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
-                                <h3 className="text-lg font-semibold mb-4">📊 Interpretacja</h3>
-
-                                <div className="space-y-4">
-                                    {benchmarkData.spiderMetrics.map((m, i) => {
-                                        const ratio = m.value / m.benchmark;
-                                        const isGood = ratio >= 1;
-
-                                        return (
-                                            <div key={i} className="flex items-center justify-between p-3 bg-[#0A0E17] rounded-lg">
-                                                <span className="text-gray-400">{m.label}</span>
-                                                <div className="flex items-center gap-2">
-                                                    <span className="font-mono">{m.value.toFixed(1)}{m.unit}</span>
-                                                    <span className={isGood ? 'text-emerald-400' : 'text-amber-400'}>
-                                                        {isGood ? '▲' : '▼'}
-                                                    </span>
-                                                    <span className="text-gray-500 text-xs">
-                                                        vs {m.benchmark.toFixed(1)}{m.unit}
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        );
-                                    })}
+            <main className="relative z-10 max-w-7xl mx-auto px-8 py-8">
+                <div className="grid grid-cols-2 gap-6">
+                    {/* Left: Peer Group */}
+                    <GlassCard className="p-6" glowColor="cyan">
+                        <div className="flex items-center justify-between mb-4">
+                            <div className="flex items-center gap-2">
+                                <span className="text-2xl">👥</span>
+                                <div>
+                                    <div className="font-semibold">Peer Group</div>
+                                    <div className="text-xs text-gray-500">{peers.length} spółek</div>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Ranking Table */}
-                        <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
-                            <h3 className="text-lg font-semibold mb-4">🏆 Ranking Wielowymiarowy</h3>
-                            <RankingTable items={benchmarkData.rankingItems} />
-
-                            {/* Legend */}
-                            <div className="mt-4 flex gap-4 text-xs text-gray-500">
-                                <span><span className="text-emerald-400">P75+</span> = Top quartile</span>
-                                <span><span className="text-cyan-400">P50-74</span> = Powyżej mediany</span>
-                                <span><span className="text-amber-400">P25-49</span> = Poniżej mediany</span>
-                                <span><span className="text-rose-400">&lt;P25</span> = Bottom quartile</span>
-                            </div>
+                        {/* Add peer input */}
+                        <div className="flex gap-2 mb-4">
+                            <input
+                                type="text"
+                                value={tickerInput}
+                                onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                                placeholder="Wpisz ticker peera..."
+                                className="flex-1 px-4 py-2 rounded-lg bg-black/30 border border-white/10 text-white placeholder-gray-500"
+                            />
+                            <button
+                                onClick={handleOpenModal}
+                                className="px-4 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 transition-colors font-medium"
+                            >
+                                + Dodaj
+                            </button>
                         </div>
+
+                        {/* Peers table */}
+                        {peers.length === 0 ? (
+                            <div className="text-center py-10 text-gray-500">
+                                Dodaj spółki porównawcze aby zobaczyć mnożniki
+                            </div>
+                        ) : (
+                            <div className="overflow-x-auto">
+                                <table className="w-full text-sm">
+                                    <thead>
+                                        <tr className="border-b border-white/10">
+                                            <th className="text-left py-2 text-gray-500 font-normal">Spółka</th>
+                                            <th className="text-right py-2 text-gray-500 font-normal">P/E</th>
+                                            <th className="text-right py-2 text-gray-500 font-normal">EV/EBITDA</th>
+                                            <th className="text-right py-2 text-gray-500 font-normal">EV/Revenue</th>
+                                            <th className="w-8"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {peers.map(peer => (
+                                            <tr key={peer.id} className="border-b border-white/5">
+                                                <td className="py-2">
+                                                    <div className="font-medium">{peer.ticker}</div>
+                                                    <div className="text-xs text-gray-500">{peer.name}</div>
+                                                </td>
+                                                <td className="text-right py-2 font-mono">
+                                                    {peer.pe !== null ? formatMultiple(peer.pe) : '—'}
+                                                </td>
+                                                <td className="text-right py-2 font-mono">
+                                                    {peer.evEbitda !== null ? formatMultiple(peer.evEbitda) : '—'}
+                                                </td>
+                                                <td className="text-right py-2 font-mono">
+                                                    {peer.evRevenue !== null ? formatMultiple(peer.evRevenue) : '—'}
+                                                </td>
+                                                <td>
+                                                    <button
+                                                        onClick={() => handleRemovePeer(peer.id)}
+                                                        className="text-gray-500 hover:text-rose-400 transition-colors"
+                                                    >
+                                                        ✗
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {/* Median row */}
+                                        <tr className="bg-white/5 font-semibold">
+                                            <td className="py-2 text-cyan-400">MEDIANA</td>
+                                            <td className="text-right py-2 font-mono text-cyan-400">
+                                                {medPE !== null ? formatMultiple(medPE) : '—'}
+                                            </td>
+                                            <td className="text-right py-2 font-mono text-cyan-400">
+                                                {medEvEbitda !== null ? formatMultiple(medEvEbitda) : '—'}
+                                            </td>
+                                            <td className="text-right py-2 font-mono text-cyan-400">
+                                                {medEvRevenue !== null ? formatMultiple(medEvRevenue) : '—'}
+                                            </td>
+                                            <td></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        )}
+                    </GlassCard>
+
+                    {/* Right: Results */}
+                    <div className="space-y-6">
+                        {/* Implied Values */}
+                        <GlassCard className="p-6" glowColor="emerald">
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="text-2xl">💎</span>
+                                <div className="font-semibold">Wartość implikowana {companyName}</div>
+                            </div>
+
+                            {peers.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    Dodaj peery aby zobaczyć wycenę
+                                </div>
+                            ) : (
+                                <div className="grid grid-cols-3 gap-4">
+                                    <div className="p-4 rounded-xl bg-white/5 text-center">
+                                        <div className="text-xs text-gray-500 uppercase mb-1">z P/E</div>
+                                        <div className="text-xl font-mono font-bold text-white">
+                                            {impliedFromPE !== null ? formatNumber(impliedFromPE, currency) : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-500">/ akcję</div>
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-white/5 text-center">
+                                        <div className="text-xs text-gray-500 uppercase mb-1">z EV/EBITDA</div>
+                                        <div className="text-xl font-mono font-bold text-white">
+                                            {impliedFromEvEbitda !== null ? formatNumber(impliedFromEvEbitda, currency) : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-500">/ akcję</div>
+                                    </div>
+                                    <div className="p-4 rounded-xl bg-white/5 text-center">
+                                        <div className="text-xs text-gray-500 uppercase mb-1">z EV/Revenue</div>
+                                        <div className="text-xl font-mono font-bold text-white">
+                                            {impliedFromEvRev !== null ? formatNumber(impliedFromEvRev, currency) : '—'}
+                                        </div>
+                                        <div className="text-xs text-gray-500">/ akcję</div>
+                                    </div>
+                                </div>
+                            )}
+                        </GlassCard>
+
+                        {/* Football Field */}
+                        <GlassCard className="p-6" glowColor="purple">
+                            <div className="flex items-center gap-2 mb-4">
+                                <span className="text-2xl">📊</span>
+                                <div className="font-semibold">Football Field</div>
+                            </div>
+
+                            {peers.length === 0 ? (
+                                <div className="text-center py-8 text-gray-500">
+                                    Dodaj peery i uzupełnij dane aby zobaczyć Football Field
+                                </div>
+                            ) : (
+                                <FootballField
+                                    methods={[
+                                        { name: 'P/E', value: impliedFromPE, color: '#10B981' },
+                                        { name: 'EV/EBITDA', value: impliedFromEvEbitda, color: '#06B6D4' },
+                                        { name: 'EV/Revenue', value: impliedFromEvRev, color: '#8B5CF6' }
+                                    ]}
+                                    marketPrice={state.market.currentPrice}
+                                    currency={currency}
+                                />
+                            )}
+                        </GlassCard>
 
                         {/* Navigation */}
-                        <div className="mt-8 flex gap-4">
+                        <div className="grid grid-cols-2 gap-4">
                             <button
-                                onClick={() => router.push('/valuation/comps')}
-                                className="flex-1 bg-[#111827] hover:bg-[#1F2937] border border-white/5 py-4 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
+                                onClick={() => router.push('/valuation/sensitivity')}
+                                className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
                             >
-                                <span className="text-2xl">📈</span>
-                                <div>
-                                    <div className="font-medium">Porównawcza</div>
-                                    <div className="text-xs text-gray-500">Mnożniki peer group</div>
-                                </div>
+                                <div className="text-2xl mb-1">🔥</div>
+                                <div className="font-medium">Analiza Wrażliwości</div>
                             </button>
                             <button
-                                onClick={() => router.push('/valuation/health')}
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-4 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
+                                onClick={() => router.push('/valuation/dcf')}
+                                className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
                             >
-                                <span className="text-2xl">📊</span>
-                                <div>
-                                    <div className="font-medium">Health Check</div>
-                                    <div className="text-xs text-emerald-200">Pełna diagnostyka</div>
-                                </div>
+                                <div className="text-2xl mb-1">💰</div>
+                                <div className="font-medium">Powrót do DCF</div>
                             </button>
                         </div>
-                    </>
-                )}
+                    </div>
+                </div>
             </main>
+
+            {/* Add Peer Modal */}
+            <AddPeerModal
+                isOpen={showModal}
+                onClose={() => setShowModal(false)}
+                onAdd={handleAddPeer}
+                initialTicker={tickerInput}
+            />
         </div>
     );
 }

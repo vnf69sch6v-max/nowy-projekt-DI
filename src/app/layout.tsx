@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+import { CompanyDataProvider } from "@/contexts/CompanyDataContext";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -8,8 +9,8 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "New Project",
-  description: "Firebase + AI powered application",
+  title: "StochFin — Probabilistic Company Valuation",
+  description: "Monte Carlo DCF valuation with real financial data",
 };
 
 export default function RootLayout({
@@ -20,8 +21,11 @@ export default function RootLayout({
   return (
     <html lang="pl">
       <body className={`${inter.variable} antialiased`}>
-        {children}
+        <CompanyDataProvider>
+          {children}
+        </CompanyDataProvider>
       </body>
     </html>
   );
 }
+

@@ -2,96 +2,72 @@
 
 // =============================================
 // StochFin — Health Check Dashboard
-// Comprehensive financial health diagnostics
+// Based on MASTER_PROMPTS v3 specification
+// Altman Z-Score, Piotroski F-Score, Financial Ratios
 // =============================================
 
-import { useEffect, useState } from 'react';
+import { useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { SourceBadge } from '@/components/ui/SourceBadge';
-import type { CompanyFinancials } from '@/types/valuation';
+import {
+    useCompanyData,
+    getField,
+    getLatestYear,
+    getPreviousYear,
+    safeDivide,
+    formatPercent,
+    formatMultiple
+} from '@/contexts/CompanyDataContext';
+import EmptyState from '@/components/ui/EmptyState';
 
 // =============================================
-// Types
+// Glass Card Component
 // =============================================
 
-interface HealthResult {
-    overall_score: number;
-    components: {
-        altman_z: AltmanResult;
-        piotroski_f: PiotrostkiResult;
-        beneish_m: BeneishResult;
-        dupont: DuPontResult;
-        ratios: RatiosResult;
-        cashflow_quality: CashflowResult;
+function GlassCard({
+    children,
+    className = '',
+    glowColor = 'emerald',
+    hover = true
+}: {
+    children: React.ReactNode;
+    className?: string;
+    glowColor?: 'emerald' | 'cyan' | 'purple' | 'amber';
+    hover?: boolean;
+}) {
+    const glowMap = {
+        emerald: 'hover:shadow-emerald-500/20',
+        cyan: 'hover:shadow-cyan-500/20',
+        purple: 'hover:shadow-purple-500/20',
+        amber: 'hover:shadow-amber-500/20'
     };
-    warnings: string[];
-    computed_at: string;
-}
 
-interface AltmanResult {
-    score: number;
-    zone: 'safe' | 'grey' | 'distress';
-    label: string;
-    component_score: number;
-    max_score: number;
-    breakdown: Record<string, { value: number; weighted: number }>;
-}
-
-interface PiotrostkiResult {
-    score: number;
-    label: string;
-    criteria: { id: number; name: string; pass: boolean; detail: string }[];
-}
-
-interface BeneishResult {
-    score: number | null;
-    label: string;
-    is_manipulator: boolean | null;
-}
-
-interface DuPontResult {
-    roe: number;
-    decomposition: {
-        tax_burden: number;
-        interest_burden: number;
-        ebit_margin: number;
-        asset_turnover: number;
-        equity_multiplier: number;
-    };
-}
-
-interface RatiosResult {
-    liquidity: Record<string, { value: number; benchmark: number; status: string }>;
-    solvency: Record<string, { value: number; benchmark: number; status: string }>;
-    profitability: Record<string, { value: number; benchmark: number; status: string }>;
-    efficiency: Record<string, { value: number; benchmark: number; status: string }>;
-}
-
-interface CashflowResult {
-    accrual_ratio: number;
-    ocf_to_ni_ratio: number;
-    fcf_positive: boolean;
+    return (
+        <div className={`
+            relative overflow-hidden rounded-2xl
+            bg-gradient-to-br from-white/[0.08] to-white/[0.02]
+            backdrop-blur-xl
+            border border-white/[0.08]
+            shadow-xl shadow-black/20
+            ${hover ? `transition-all duration-300 hover:border-white/20 hover:shadow-2xl ${glowMap[glowColor]}` : ''}
+            ${className}
+        `}>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
+            <div className="relative z-10">{children}</div>
+        </div>
+    );
 }
 
 // =============================================
-// Gauge Component
+// Health Gauge Component
 // =============================================
 
 function HealthGauge({ score }: { score: number }) {
     const getColor = () => {
-        if (score >= 86) return { main: '#10B981', glow: 'rgba(16,185,129,0.4)' };
-        if (score >= 71) return { main: '#10B981', glow: 'rgba(16,185,129,0.3)' };
-        if (score >= 51) return { main: '#38BDF8', glow: 'rgba(56,189,248,0.3)' };
-        if (score >= 31) return { main: '#F59E0B', glow: 'rgba(245,158,11,0.3)' };
-        return { main: '#EF4444', glow: 'rgba(239,68,68,0.4)' };
-    };
-
-    const getLabel = () => {
-        if (score >= 86) return 'DOSKONAŁY';
-        if (score >= 71) return 'DOBRY';
-        if (score >= 51) return 'STABILNY';
-        if (score >= 31) return 'SŁABY';
-        return 'KRYTYCZNY';
+        if (score >= 86) return { main: '#10B981', glow: 'rgba(16,185,129,0.4)', label: 'DOSKONAŁY' };
+        if (score >= 71) return { main: '#10B981', glow: 'rgba(16,185,129,0.3)', label: 'DOBRY' };
+        if (score >= 51) return { main: '#38BDF8', glow: 'rgba(56,189,248,0.3)', label: 'STABILNY' };
+        if (score >= 31) return { main: '#F59E0B', glow: 'rgba(245,158,11,0.3)', label: 'SŁABY' };
+        return { main: '#EF4444', glow: 'rgba(239,68,68,0.4)', label: 'KRYTYCZNY' };
     };
 
     const color = getColor();
@@ -101,7 +77,6 @@ function HealthGauge({ score }: { score: number }) {
     return (
         <div className="relative w-52 h-52 mx-auto">
             <svg className="w-full h-full transform -rotate-90">
-                {/* Background circle */}
                 <circle
                     cx="104"
                     cy="104"
@@ -110,7 +85,6 @@ function HealthGauge({ score }: { score: number }) {
                     stroke="#1F2937"
                     strokeWidth="12"
                 />
-                {/* Progress circle */}
                 <circle
                     cx="104"
                     cy="104"
@@ -136,7 +110,7 @@ function HealthGauge({ score }: { score: number }) {
                     className="text-xs uppercase tracking-wider mt-1 font-semibold"
                     style={{ color: color.main }}
                 >
-                    {getLabel()}
+                    {color.label}
                 </span>
             </div>
         </div>
@@ -144,586 +118,696 @@ function HealthGauge({ score }: { score: number }) {
 }
 
 // =============================================
-// Altman Z-Score Bar
+// Altman Z-Score Zone Bar
 // =============================================
 
-function AltmanZBar({ result }: { result: AltmanResult }) {
-    const getZonePosition = (z: number) => {
-        if (z <= 0) return 0;
-        if (z >= 5) return 100;
-        return (z / 5) * 100;
-    };
+function AltmanZoneBar({ z }: { z: number }) {
+    const zClamped = Math.min(Math.max(z, 0), 5);
+    const pct = (zClamped / 5) * 100;
 
     return (
-        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-2">
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-lg">🔬</span>
-                <h3 className="text-lg font-semibold">ALTMAN Z-SCORE</h3>
+        <div className="relative h-8 rounded-lg overflow-hidden flex">
+            <div className="flex-1 bg-rose-500/30" />
+            <div className="flex-1 bg-amber-500/30" />
+            <div className="flex-1 bg-emerald-500/30" />
+            {/* Zone labels */}
+            <div className="absolute inset-0 flex text-xs font-medium text-white/70">
+                <div className="flex-1 flex items-center justify-center">ZAGROŻENIE</div>
+                <div className="flex-1 flex items-center justify-center">SZARA</div>
+                <div className="flex-1 flex items-center justify-center">BEZPIECZNA</div>
             </div>
-            <p className="text-sm text-gray-500 mb-4">Prawdopodobieństwo bankructwa w ciągu 2 lat</p>
-
-            {/* Zone Bar */}
-            <div className="relative h-10 rounded-lg overflow-hidden mb-2">
-                <div className="absolute inset-0 flex">
-                    <div className="flex-1 bg-rose-500/30" />
-                    <div className="flex-1 bg-amber-500/30" />
-                    <div className="flex-1 bg-emerald-500/30" />
-                </div>
-                {/* Marker */}
-                <div
-                    className="absolute top-0 h-full w-1 bg-white rounded shadow-lg"
-                    style={{ left: `${getZonePosition(result.score)}%`, transform: 'translateX(-50%)' }}
-                />
-            </div>
-
-            {/* Labels */}
-            <div className="flex text-xs mb-4">
-                <div className="flex-1 text-center text-rose-400">ZAGROŻENIE<br />&lt; 1.8</div>
-                <div className="flex-1 text-center text-amber-400">SZARA STREFA<br />1.8 - 3.0</div>
-                <div className="flex-1 text-center text-emerald-400">BEZPIECZNA<br />&gt; 3.0</div>
-            </div>
-
-            {/* Score */}
-            <div className={`text-center py-3 rounded-lg ${result.zone === 'safe' ? 'bg-emerald-500/20 text-emerald-400' :
-                result.zone === 'grey' ? 'bg-amber-500/20 text-amber-400' :
-                    'bg-rose-500/20 text-rose-400'
-                }`}>
-                <span className="text-2xl font-mono font-bold">Z = {result.score}</span>
-                <span className="ml-2 text-sm">"{result.label}"</span>
-            </div>
-
-            {/* Breakdown Table */}
-            <div className="mt-4 overflow-x-auto">
-                <table className="w-full text-sm">
-                    <thead>
-                        <tr className="text-gray-500 text-xs uppercase">
-                            <th className="text-left py-2">Komponent</th>
-                            <th className="text-right py-2">Wartość</th>
-                            <th className="text-right py-2">Wkład</th>
-                        </tr>
-                    </thead>
-                    <tbody className="font-mono">
-                        <tr className="border-t border-white/5">
-                            <td className="py-2 text-gray-400">A: Kap. obrotowy/Aktywa</td>
-                            <td className="text-right text-gray-300">{result.breakdown?.A?.value?.toFixed(3)}</td>
-                            <td className="text-right text-cyan-400">{result.breakdown?.A?.weighted?.toFixed(3)}</td>
-                        </tr>
-                        <tr className="border-t border-white/5">
-                            <td className="py-2 text-gray-400">B: Zysk zatrz./Aktywa</td>
-                            <td className="text-right text-gray-300">{result.breakdown?.B?.value?.toFixed(3)}</td>
-                            <td className="text-right text-cyan-400">{result.breakdown?.B?.weighted?.toFixed(3)}</td>
-                        </tr>
-                        <tr className="border-t border-white/5">
-                            <td className="py-2 text-gray-400">C: EBIT/Aktywa</td>
-                            <td className="text-right text-gray-300">{result.breakdown?.C?.value?.toFixed(3)}</td>
-                            <td className="text-right text-cyan-400">{result.breakdown?.C?.weighted?.toFixed(3)}</td>
-                        </tr>
-                        <tr className="border-t border-white/5">
-                            <td className="py-2 text-gray-400">D: Mkt Cap/Zobow.</td>
-                            <td className="text-right text-gray-300">{result.breakdown?.D?.value?.toFixed(3)}</td>
-                            <td className="text-right text-cyan-400">{result.breakdown?.D?.weighted?.toFixed(3)}</td>
-                        </tr>
-                        <tr className="border-t border-white/5">
-                            <td className="py-2 text-gray-400">E: Przychody/Aktywa</td>
-                            <td className="text-right text-gray-300">{result.breakdown?.E?.value?.toFixed(3)}</td>
-                            <td className="text-right text-cyan-400">{result.breakdown?.E?.weighted?.toFixed(3)}</td>
-                        </tr>
-                    </tbody>
-                </table>
+            {/* Marker */}
+            <div
+                className="absolute top-0 h-full"
+                style={{ left: `${pct}%`, transform: 'translateX(-50%)' }}
+            >
+                <div className="w-4 h-4 bg-white rounded-full shadow-lg -mt-1 ml-[-6px]" />
+                <div className="w-1 h-6 bg-white mx-auto" />
             </div>
         </div>
     );
 }
 
 // =============================================
-// Piotroski F-Score
-// =============================================
-
-function PiotroskiFScore({ result }: { result: PiotrostkiResult }) {
-    return (
-        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-2">
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-lg">📊</span>
-                <h3 className="text-lg font-semibold">PIOTROSKI F-SCORE</h3>
-            </div>
-            <p className="text-sm text-gray-500 mb-4">Siła finansowa spółki (0-9)</p>
-
-            {/* Score Display */}
-            <div className={`text-center py-4 rounded-lg mb-4 ${result.score >= 7 ? 'bg-emerald-500/20' :
-                result.score >= 4 ? 'bg-amber-500/20' :
-                    'bg-rose-500/20'
-                }`}>
-                <span className={`text-4xl font-mono font-bold ${result.score >= 7 ? 'text-emerald-400' :
-                    result.score >= 4 ? 'text-amber-400' :
-                        'text-rose-400'
-                    }`}>
-                    {result.score}/9
-                </span>
-                <div className={`text-sm mt-1 ${result.score >= 7 ? 'text-emerald-400' :
-                    result.score >= 4 ? 'text-amber-400' :
-                        'text-rose-400'
-                    }`}>
-                    {result.label}
-                </div>
-            </div>
-
-            {/* Criteria Checklist */}
-            <div className="space-y-2">
-                {result.criteria?.map(c => (
-                    <div
-                        key={c.id}
-                        className={`flex items-center justify-between p-2 rounded border-l-3 ${c.pass
-                            ? 'bg-emerald-500/10 border-emerald-500'
-                            : 'bg-rose-500/10 border-rose-500'
-                            }`}
-                        style={{ borderLeftWidth: '3px' }}
-                    >
-                        <div className="flex items-center gap-2">
-                            <span>{c.pass ? '✓' : '✗'}</span>
-                            <span className="text-sm">{c.name}</span>
-                        </div>
-                        <span className="text-xs font-mono text-gray-400">{c.detail}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-}
-
-// =============================================
-// Ratio Card
+// Ratio Card Component
 // =============================================
 
 function RatioCard({
-    label,
+    name,
     value,
-    unit = '',
+    formatted,
     status,
-    formula
+    benchmark
 }: {
-    label: string;
-    value: number;
-    unit?: string;
-    status: string;
-    formula?: string;
+    name: string;
+    value: number | null;
+    formatted: string;
+    status: 'good' | 'ok' | 'bad' | null;
+    benchmark: string;
 }) {
-    const statusColors = {
-        excellent: 'bg-emerald-500',
-        ok: 'bg-cyan-500',
-        warning: 'bg-amber-500',
-        critical: 'bg-rose-500'
-    };
-
-    const statusLabels = {
-        excellent: '✓ Doskonały',
-        ok: '✓ OK',
-        warning: '⚠️ Uwaga',
-        critical: '🚨 Krytyczny'
-    };
-
     return (
-        <div className="bg-[#0A0E17] rounded-lg p-4 border border-white/5">
-            <div className="text-xs text-gray-500 uppercase tracking-wider mb-2">{label}</div>
-            <div className="flex items-end gap-2">
-                <span className="text-xl font-mono font-bold">{value?.toFixed?.(2) || value}{unit}</span>
-                <div className={`w-2 h-2 rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-500'}`} />
+        <div className="p-4 rounded-xl bg-white/5">
+            <div className="text-xs text-gray-500 uppercase tracking-wide mb-1">{name}</div>
+            <div className={`text-2xl font-mono font-bold ${value !== null ? 'text-white' : 'text-gray-500'}`}>
+                {formatted}
             </div>
-            <div className={`text-xs mt-1 ${status === 'excellent' || status === 'ok' ? 'text-emerald-400' :
-                status === 'warning' ? 'text-amber-400' : 'text-rose-400'
-                }`}>
-                {statusLabels[status as keyof typeof statusLabels] || status}
-            </div>
-            {formula && <div className="text-xs text-gray-600 mt-1">{formula}</div>}
-        </div>
-    );
-}
-
-// =============================================
-// DuPont Tree
-// =============================================
-
-function DuPontTree({ result }: { result: DuPontResult }) {
-    const d = result.decomposition;
-
-    return (
-        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
-            <div className="flex items-center gap-2 mb-2">
-                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-lg">🔍</span>
-                <h3 className="text-lg font-semibold">ANALIZA DUPONT (Dekompozycja ROE)</h3>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">Skąd pochodzi zwrot na kapitale?</p>
-
-            {/* ROE Hero */}
-            <div className="text-center mb-6">
-                <div className="text-xs text-gray-500 uppercase">ROE</div>
-                <div className="text-4xl font-mono font-bold text-emerald-400">
-                    {(result.roe * 100).toFixed(1)}%
-                </div>
-            </div>
-
-            {/* 5-Way Decomposition Grid */}
-            <div className="grid grid-cols-5 gap-2 text-center">
-                <div className="bg-[#0A0E17] rounded-lg p-3">
-                    <div className="text-xs text-gray-500">Tax Burden</div>
-                    <div className="text-lg font-mono">{d.tax_burden?.toFixed(2)}</div>
-                </div>
-                <div className="text-xl flex items-center justify-center text-gray-600">×</div>
-                <div className="bg-[#0A0E17] rounded-lg p-3">
-                    <div className="text-xs text-gray-500">Interest Burden</div>
-                    <div className="text-lg font-mono">{d.interest_burden?.toFixed(2)}</div>
-                </div>
-                <div className="text-xl flex items-center justify-center text-gray-600">×</div>
-                <div className="bg-[#0A0E17] rounded-lg p-3">
-                    <div className="text-xs text-gray-500">EBIT Margin</div>
-                    <div className="text-lg font-mono">{(d.ebit_margin * 100).toFixed(1)}%</div>
-                </div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2 text-center mt-2">
-                <div className="col-span-2" />
-                <div className="text-xl flex items-center justify-center text-gray-600">×</div>
-                <div className="bg-[#0A0E17] rounded-lg p-3">
-                    <div className="text-xs text-gray-500">Asset Turnover</div>
-                    <div className="text-lg font-mono">{d.asset_turnover?.toFixed(2)}x</div>
-                </div>
-                <div className="text-xl flex items-center justify-center text-gray-600">×</div>
-            </div>
-
-            <div className="grid grid-cols-5 gap-2 text-center mt-2">
-                <div className="col-span-3" />
-                <div className="col-span-2 bg-violet-500/20 border border-violet-500/30 rounded-lg p-3">
-                    <div className="text-xs text-violet-400">Equity Multiplier</div>
-                    <div className="text-lg font-mono text-violet-400">{d.equity_multiplier?.toFixed(2)}x</div>
-                </div>
+            <div className="text-xs mt-1 flex items-center gap-2">
+                {value !== null ? (
+                    <span className={
+                        status === 'good' ? 'text-emerald-400' :
+                            status === 'bad' ? 'text-rose-400' : 'text-amber-400'
+                    }>
+                        {status === 'good' ? '✓ Dobry' : status === 'bad' ? '⚠ Słaby' : '→ OK'}
+                    </span>
+                ) : (
+                    <span className="text-gray-500">Brak danych</span>
+                )}
+                <span className="text-gray-500">({benchmark})</span>
             </div>
         </div>
     );
 }
 
 // =============================================
-// Main Health Dashboard Page
+// Main Component
 // =============================================
 
-export default function HealthDashboardPage() {
+export default function HealthCheckPage() {
     const router = useRouter();
-    const [data, setData] = useState<CompanyFinancials | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [calculating, setCalculating] = useState(false);
-    const [health, setHealth] = useState<HealthResult | null>(null);
+    const { state } = useCompanyData();
 
-    useEffect(() => {
-        const stored = localStorage.getItem('stochfin_company_data');
-        if (stored) {
-            setData(JSON.parse(stored));
+    const y0 = getLatestYear(state);
+    const y1 = getPreviousYear(state);
+    const currency = state.currency || 'PLN';
+    const companyName = state.companyName || 'Brak danych';
+
+    // Guard: if no data loaded
+    if (!state.dataLoaded || !y0) {
+        return (
+            <div className="min-h-screen bg-[#030712] text-white">
+                <EmptyState
+                    message="Brak załadowanych danych"
+                    description="Załaduj dane spółki aby zobaczyć analizę kondycji finansowej"
+                    ctaText="📡 Załaduj dane"
+                    onCta={() => router.push('/valuation/load')}
+                    icon="🏥"
+                />
+            </div>
+        );
+    }
+
+    // =============================================
+    // ALTMAN Z-SCORE
+    // =============================================
+
+    const altmanData = useMemo(() => {
+        const workingCap = (getField(state, 'balanceSheet', y0, 'currentAssets') || 0)
+            - (getField(state, 'balanceSheet', y0, 'currentLiabilities') || 0);
+        const totalAssets = getField(state, 'balanceSheet', y0, 'totalAssets');
+        const retainedEarnings = getField(state, 'balanceSheet', y0, 'retainedEarnings');
+        const ebit = getField(state, 'incomeStatement', y0, 'ebit')
+            || ((getField(state, 'incomeStatement', y0, 'ebitda') || 0)
+                - (getField(state, 'incomeStatement', y0, 'depreciation') || 0));
+        const marketCap = state.market.marketCap
+            || ((state.market.currentPrice || 0) * (state.market.sharesOutstanding || 0));
+        const totalLiabilities = getField(state, 'balanceSheet', y0, 'totalLiabilities');
+        const revenue = getField(state, 'incomeStatement', y0, 'revenue');
+
+        const missing: string[] = [];
+        if (!totalAssets) missing.push('Total Assets');
+        if (totalLiabilities === null || totalLiabilities === 0) missing.push('Total Liabilities');
+        if (!revenue) missing.push('Revenue');
+
+        if (missing.length > 0 || !totalAssets || totalLiabilities === null || totalAssets === 0) {
+            return { z: null, missing, components: null };
         }
-        setLoading(false);
-    }, []);
 
-    useEffect(() => {
-        if (data && !health) {
-            calculateHealth();
-        }
-    }, [data]);
+        const A = safeDivide(workingCap, totalAssets) || 0;
+        const B = safeDivide(retainedEarnings, totalAssets) || 0;
+        const C = safeDivide(ebit, totalAssets) || 0;
+        const D = safeDivide(marketCap, totalLiabilities) || 0;
+        const E = safeDivide(revenue, totalAssets) || 0;
 
-    const calculateHealth = async () => {
-        if (!data) return;
-        setCalculating(true);
+        const z = 1.2 * A + 1.4 * B + 3.3 * C + 0.6 * D + 1.0 * E;
 
-        try {
-            const res = await fetch('/api/valuation/health', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ financials: data })
-            });
+        return {
+            z,
+            missing: [],
+            components: { A, B, C, D, E }
+        };
+    }, [state, y0]);
 
-            const json = await res.json();
-            if (json.result) {
-                setHealth(json.result);
-            }
-        } catch (error) {
-            console.error('Health calculation error:', error);
-        } finally {
-            setCalculating(false);
-        }
+    const getZLabel = (z: number) => {
+        if (z >= 2.99) return 'Strefa bezpieczna';
+        if (z >= 1.81) return 'Strefa szara';
+        return 'Strefa zagrożenia';
     };
 
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Ładowanie...</div>
-            </div>
-        );
-    }
+    // =============================================
+    // PIOTROSKI F-SCORE
+    // =============================================
 
-    if (!data) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex flex-col items-center justify-center gap-4 text-white">
-                <div className="text-5xl mb-4">📊</div>
-                <p className="text-gray-400">Brak załadowanych danych</p>
-                <button
-                    onClick={() => router.push('/valuation/load')}
-                    className="bg-cyan-600 hover:bg-cyan-500 px-6 py-2 rounded-lg text-sm"
-                >
-                    Załaduj dane
-                </button>
-            </div>
-        );
-    }
+    const piotroskiData = useMemo(() => {
+        if (!y1) {
+            return { score: 0, max: 0, criteria: [] };
+        }
 
-    const sourceType = data.source === 'fmp' || data.source === 'alpha_vantage' ? 'api' : 'pdf';
+        const criteria: {
+            name: string;
+            pass: boolean | null;
+            detail: string | null;
+            missing: string | null;
+        }[] = [];
+
+        // 1. ROA > 0
+        const netIncome0 = getField(state, 'incomeStatement', y0, 'netIncome');
+        const totalAssets0 = getField(state, 'balanceSheet', y0, 'totalAssets');
+        const roa = safeDivide(netIncome0, totalAssets0);
+        if (roa !== null) {
+            criteria.push({ name: 'ROA dodatni', pass: roa > 0, detail: formatPercent(roa), missing: null });
+        } else {
+            criteria.push({ name: 'ROA dodatni', pass: null, detail: null, missing: 'Net Income / Total Assets' });
+        }
+
+        // 2. Operating CF > 0
+        const ocf0 = getField(state, 'cashFlow', y0, 'operatingCF');
+        if (ocf0 !== null) {
+            criteria.push({ name: 'Operating CF dodatni', pass: ocf0 > 0, detail: ocf0.toLocaleString() + ' ' + currency, missing: null });
+        } else {
+            criteria.push({ name: 'Operating CF dodatni', pass: null, detail: null, missing: 'Operating Cash Flow' });
+        }
+
+        // 3. ROA increase
+        const netIncome1 = getField(state, 'incomeStatement', y1, 'netIncome');
+        const totalAssets1 = getField(state, 'balanceSheet', y1, 'totalAssets');
+        const roa0 = safeDivide(netIncome0, totalAssets0);
+        const roa1 = safeDivide(netIncome1, totalAssets1);
+        if (roa0 !== null && roa1 !== null) {
+            criteria.push({ name: 'ROA wzrasta', pass: roa0 > roa1, detail: `${formatPercent(roa1)} → ${formatPercent(roa0)}`, missing: null });
+        } else {
+            criteria.push({ name: 'ROA wzrasta', pass: null, detail: null, missing: 'ROA (y-1)' });
+        }
+
+        // 4. Accruals: OCF > Net Income
+        if (ocf0 !== null && netIncome0 !== null) {
+            criteria.push({ name: 'OCF > Net Income', pass: ocf0 > netIncome0, detail: `OCF ${ocf0.toLocaleString()} vs NI ${netIncome0.toLocaleString()}`, missing: null });
+        } else {
+            criteria.push({ name: 'OCF > Net Income', pass: null, detail: null, missing: 'OCF / Net Income' });
+        }
+
+        // 5. Long-term debt decrease
+        const ltDebt0 = getField(state, 'balanceSheet', y0, 'longTermDebt') || getField(state, 'balanceSheet', y0, 'totalDebt');
+        const ltDebt1 = getField(state, 'balanceSheet', y1, 'longTermDebt') || getField(state, 'balanceSheet', y1, 'totalDebt');
+        if (ltDebt0 !== null && ltDebt1 !== null) {
+            criteria.push({ name: 'Dług długoterm. spada', pass: ltDebt0 <= ltDebt1, detail: `${ltDebt1.toLocaleString()} → ${ltDebt0.toLocaleString()}`, missing: null });
+        } else {
+            criteria.push({ name: 'Dług długoterm. spada', pass: null, detail: null, missing: 'Long Term Debt' });
+        }
+
+        // 6. Current Ratio increase
+        const currAssets0 = getField(state, 'balanceSheet', y0, 'currentAssets');
+        const currLiab0 = getField(state, 'balanceSheet', y0, 'currentLiabilities');
+        const currAssets1 = getField(state, 'balanceSheet', y1, 'currentAssets');
+        const currLiab1 = getField(state, 'balanceSheet', y1, 'currentLiabilities');
+        const cr0 = safeDivide(currAssets0, currLiab0);
+        const cr1 = safeDivide(currAssets1, currLiab1);
+        if (cr0 !== null && cr1 !== null) {
+            criteria.push({ name: 'Current Ratio wzrasta', pass: cr0 > cr1, detail: `${formatMultiple(cr1)} → ${formatMultiple(cr0)}`, missing: null });
+        } else {
+            criteria.push({ name: 'Current Ratio wzrasta', pass: null, detail: null, missing: 'Current Assets / Liabilities' });
+        }
+
+        // 7. No new shares issued
+        const shares0 = state.market.sharesOutstanding || getField(state, 'balanceSheet', y0, 'sharesOutstanding');
+        const shares1 = getField(state, 'balanceSheet', y1, 'sharesOutstanding');
+        if (shares0 !== null && shares1 !== null) {
+            criteria.push({ name: 'Brak rozwodnienia', pass: shares0 <= shares1, detail: `${shares1.toLocaleString()} → ${shares0.toLocaleString()}`, missing: null });
+        } else {
+            criteria.push({ name: 'Brak rozwodnienia', pass: null, detail: null, missing: 'Shares Outstanding' });
+        }
+
+        // 8. Gross Margin increase
+        const grossProfit0 = getField(state, 'incomeStatement', y0, 'grossProfit')
+            || ((getField(state, 'incomeStatement', y0, 'revenue') || 0)
+                - (getField(state, 'incomeStatement', y0, 'costOfRevenue') || 0));
+        const rev0 = getField(state, 'incomeStatement', y0, 'revenue');
+        const grossProfit1 = getField(state, 'incomeStatement', y1, 'grossProfit')
+            || ((getField(state, 'incomeStatement', y1, 'revenue') || 0)
+                - (getField(state, 'incomeStatement', y1, 'costOfRevenue') || 0));
+        const rev1 = getField(state, 'incomeStatement', y1, 'revenue');
+        const gm0 = safeDivide(grossProfit0, rev0);
+        const gm1 = safeDivide(grossProfit1, rev1);
+        if (gm0 !== null && gm1 !== null) {
+            criteria.push({ name: 'Marża brutto wzrasta', pass: gm0 > gm1, detail: `${formatPercent(gm1)} → ${formatPercent(gm0)}`, missing: null });
+        } else {
+            criteria.push({ name: 'Marża brutto wzrasta', pass: null, detail: null, missing: 'Gross Profit / Revenue' });
+        }
+
+        // 9. Asset Turnover increase
+        const at0 = safeDivide(rev0, totalAssets0);
+        const at1 = safeDivide(rev1, totalAssets1);
+        if (at0 !== null && at1 !== null) {
+            criteria.push({ name: 'Asset Turnover wzrasta', pass: at0 > at1, detail: `${formatMultiple(at1)} → ${formatMultiple(at0)}`, missing: null });
+        } else {
+            criteria.push({ name: 'Asset Turnover wzrasta', pass: null, detail: null, missing: 'Revenue / Total Assets' });
+        }
+
+        const score = criteria.filter(c => c.pass === true).length;
+        const max = criteria.filter(c => c.pass !== null).length;
+
+        return { score, max, criteria };
+    }, [state, y0, y1, currency]);
+
+    const getScoreLabel = (score: number) => {
+        if (score >= 7) return 'Silna';
+        if (score >= 4) return 'Średnia';
+        return 'Słaba';
+    };
+
+    // =============================================
+    // FINANCIAL RATIOS
+    // =============================================
+
+    const ratios = useMemo(() => {
+        const rev = getField(state, 'incomeStatement', y0, 'revenue');
+        const ebitda = getField(state, 'incomeStatement', y0, 'ebitda');
+        const netIncome = getField(state, 'incomeStatement', y0, 'netIncome');
+        const totalAssets = getField(state, 'balanceSheet', y0, 'totalAssets');
+        const currentAssets = getField(state, 'balanceSheet', y0, 'currentAssets');
+        const currentLiabilities = getField(state, 'balanceSheet', y0, 'currentLiabilities');
+        const cash = getField(state, 'balanceSheet', y0, 'cash');
+        const inventory = getField(state, 'balanceSheet', y0, 'inventory');
+        const totalLiabilities = getField(state, 'balanceSheet', y0, 'totalLiabilities');
+        const totalEquity = getField(state, 'balanceSheet', y0, 'totalEquity');
+        const totalDebt = getField(state, 'balanceSheet', y0, 'longTermDebt') || getField(state, 'balanceSheet', y0, 'totalDebt');
+        const receivables = getField(state, 'balanceSheet', y0, 'receivables');
+        const costOfRevenue = getField(state, 'incomeStatement', y0, 'costOfRevenue');
+
+        type RatioItem = {
+            name: string;
+            value: number | null;
+            formatted: string;
+            status: 'good' | 'ok' | 'bad' | null;
+            benchmark: string;
+        };
+
+        // LIQUIDITY
+        const currentRatio = safeDivide(currentAssets, currentLiabilities);
+        const quickRatio = safeDivide((currentAssets || 0) - (inventory || 0), currentLiabilities);
+        const cashRatio = safeDivide(cash, currentLiabilities);
+
+        const liquidity: RatioItem[] = [
+            {
+                name: 'Current Ratio',
+                value: currentRatio,
+                formatted: currentRatio !== null ? formatMultiple(currentRatio) : '—',
+                status: currentRatio !== null ? (currentRatio >= 1.5 ? 'good' : currentRatio >= 1.0 ? 'ok' : 'bad') : null,
+                benchmark: '> 1.5x'
+            },
+            {
+                name: 'Quick Ratio',
+                value: quickRatio,
+                formatted: quickRatio !== null ? formatMultiple(quickRatio) : '—',
+                status: quickRatio !== null ? (quickRatio >= 1.0 ? 'good' : quickRatio >= 0.7 ? 'ok' : 'bad') : null,
+                benchmark: '> 1.0x'
+            },
+            {
+                name: 'Cash Ratio',
+                value: cashRatio,
+                formatted: cashRatio !== null ? formatMultiple(cashRatio) : '—',
+                status: cashRatio !== null ? (cashRatio >= 0.5 ? 'good' : cashRatio >= 0.2 ? 'ok' : 'bad') : null,
+                benchmark: '> 0.5x'
+            }
+        ];
+
+        // SOLVENCY
+        const debtEquity = safeDivide(totalDebt, totalEquity);
+        const debtAssets = safeDivide(totalLiabilities, totalAssets);
+        const equityRatio = safeDivide(totalEquity, totalAssets);
+
+        const solvency: RatioItem[] = [
+            {
+                name: 'Debt / Equity',
+                value: debtEquity,
+                formatted: debtEquity !== null ? formatMultiple(debtEquity) : '—',
+                status: debtEquity !== null ? (debtEquity <= 0.5 ? 'good' : debtEquity <= 1.0 ? 'ok' : 'bad') : null,
+                benchmark: '< 0.5x'
+            },
+            {
+                name: 'Debt / Assets',
+                value: debtAssets,
+                formatted: debtAssets !== null ? formatPercent(debtAssets) : '—',
+                status: debtAssets !== null ? (debtAssets <= 0.4 ? 'good' : debtAssets <= 0.6 ? 'ok' : 'bad') : null,
+                benchmark: '< 40%'
+            },
+            {
+                name: 'Equity Ratio',
+                value: equityRatio,
+                formatted: equityRatio !== null ? formatPercent(equityRatio) : '—',
+                status: equityRatio !== null ? (equityRatio >= 0.5 ? 'good' : equityRatio >= 0.3 ? 'ok' : 'bad') : null,
+                benchmark: '> 50%'
+            }
+        ];
+
+        // PROFITABILITY
+        const grossMargin = safeDivide((rev || 0) - (costOfRevenue || 0), rev);
+        const ebitdaMargin = safeDivide(ebitda, rev);
+        const netMargin = safeDivide(netIncome, rev);
+        const roa = safeDivide(netIncome, totalAssets);
+        const roe = safeDivide(netIncome, totalEquity);
+
+        const profitability: RatioItem[] = [
+            {
+                name: 'Gross Margin',
+                value: grossMargin,
+                formatted: grossMargin !== null ? formatPercent(grossMargin) : '—',
+                status: grossMargin !== null ? (grossMargin >= 0.4 ? 'good' : grossMargin >= 0.2 ? 'ok' : 'bad') : null,
+                benchmark: '> 40%'
+            },
+            {
+                name: 'EBITDA Margin',
+                value: ebitdaMargin,
+                formatted: ebitdaMargin !== null ? formatPercent(ebitdaMargin) : '—',
+                status: ebitdaMargin !== null ? (ebitdaMargin >= 0.2 ? 'good' : ebitdaMargin >= 0.1 ? 'ok' : 'bad') : null,
+                benchmark: '> 20%'
+            },
+            {
+                name: 'Net Margin',
+                value: netMargin,
+                formatted: netMargin !== null ? formatPercent(netMargin) : '—',
+                status: netMargin !== null ? (netMargin >= 0.1 ? 'good' : netMargin >= 0.05 ? 'ok' : 'bad') : null,
+                benchmark: '> 10%'
+            },
+            {
+                name: 'ROA',
+                value: roa,
+                formatted: roa !== null ? formatPercent(roa) : '—',
+                status: roa !== null ? (roa >= 0.1 ? 'good' : roa >= 0.05 ? 'ok' : 'bad') : null,
+                benchmark: '> 10%'
+            },
+            {
+                name: 'ROE',
+                value: roe,
+                formatted: roe !== null ? formatPercent(roe) : '—',
+                status: roe !== null ? (roe >= 0.15 ? 'good' : roe >= 0.08 ? 'ok' : 'bad') : null,
+                benchmark: '> 15%'
+            }
+        ];
+
+        // EFFICIENCY
+        const assetTurnover = safeDivide(rev, totalAssets);
+        const receivablesTurnover = safeDivide(rev, receivables);
+        const inventoryTurnover = safeDivide(costOfRevenue, inventory);
+
+        const efficiency: RatioItem[] = [
+            {
+                name: 'Asset Turnover',
+                value: assetTurnover,
+                formatted: assetTurnover !== null ? formatMultiple(assetTurnover) : '—',
+                status: assetTurnover !== null ? (assetTurnover >= 1.0 ? 'good' : assetTurnover >= 0.5 ? 'ok' : 'bad') : null,
+                benchmark: '> 1.0x'
+            },
+            {
+                name: 'Receivables Turnover',
+                value: receivablesTurnover,
+                formatted: receivablesTurnover !== null ? formatMultiple(receivablesTurnover) : '—',
+                status: receivablesTurnover !== null ? (receivablesTurnover >= 8 ? 'good' : receivablesTurnover >= 4 ? 'ok' : 'bad') : null,
+                benchmark: '> 8x'
+            },
+            {
+                name: 'Inventory Turnover',
+                value: inventoryTurnover,
+                formatted: inventoryTurnover !== null ? formatMultiple(inventoryTurnover) : '—',
+                status: inventoryTurnover !== null ? (inventoryTurnover >= 6 ? 'good' : inventoryTurnover >= 3 ? 'ok' : 'bad') : null,
+                benchmark: '> 6x'
+            }
+        ];
+
+        return { liquidity, solvency, profitability, efficiency };
+    }, [state, y0]);
+
+    // =============================================
+    // OVERALL SCORE (0-100)
+    // =============================================
+
+    const overallScore = useMemo(() => {
+        let points = 0;
+        let maxPoints = 0;
+
+        // Altman Z (20 points)
+        if (altmanData.z !== null) {
+            maxPoints += 20;
+            if (altmanData.z >= 2.99) points += 20;
+            else if (altmanData.z >= 1.81) points += 10;
+        }
+
+        // Piotroski (30 points)
+        if (piotroskiData.max > 0) {
+            maxPoints += 30;
+            points += Math.round((piotroskiData.score / piotroskiData.max) * 30);
+        }
+
+        // Ratios (50 points, split evenly)
+        const allRatios = [...ratios.liquidity, ...ratios.solvency, ...ratios.profitability, ...ratios.efficiency];
+        const ratioWithStatus = allRatios.filter(r => r.status !== null);
+        if (ratioWithStatus.length > 0) {
+            maxPoints += 50;
+            const goodCount = ratioWithStatus.filter(r => r.status === 'good').length;
+            const okCount = ratioWithStatus.filter(r => r.status === 'ok').length;
+            points += Math.round(((goodCount * 1.0 + okCount * 0.5) / ratioWithStatus.length) * 50);
+        }
+
+        return maxPoints > 0 ? Math.round((points / maxPoints) * 100) : 0;
+    }, [altmanData, piotroskiData, ratios]);
 
     return (
         <div className="min-h-screen bg-[#030712] text-white overflow-hidden">
-            {/* Animated background */}
+            {/* Animated Background */}
             <div className="fixed inset-0 pointer-events-none">
                 <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[120px] animate-pulse" />
                 <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
-                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-purple-500/3 rounded-full blur-[150px]" />
             </div>
 
             {/* Header */}
             <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
                 <div className="max-w-7xl mx-auto px-8 py-6">
-                    <button onClick={() => router.push('/valuation/dcf')} className="text-gray-500 hover:text-white text-sm mb-2">
+                    <button
+                        onClick={() => router.push('/valuation/dcf')}
+                        className="text-gray-500 hover:text-white text-sm mb-2 transition-colors"
+                    >
                         ← Powrót do DCF
                     </button>
-                    <h1 className="text-2xl font-bold font-mono">
-                        Health Check
-                        <span className="text-gray-400 ml-3">— {data.company_name} ({data.ticker})</span>
+                    <h1 className="text-2xl font-mono font-bold">
+                        Health Check — {companyName}
                     </h1>
-                    <div className="flex items-center gap-4 mt-2 text-sm text-gray-400">
-                        <span>Kompleksowa diagnostyka kondycji finansowej</span>
-                        <SourceBadge type={sourceType as any} source={data.source.toUpperCase()} />
+                    <div className="text-sm text-gray-500 mt-1">
+                        Analiza kondycji finansowej na podstawie danych z {y0}
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-7xl mx-auto px-8 py-8">
-                {calculating ? (
-                    <div className="flex flex-col items-center justify-center py-20">
-                        <div className="animate-spin text-4xl mb-4">⟳</div>
-                        <p className="text-gray-400">Obliczam wskaźniki kondycji...</p>
-                    </div>
-                ) : health ? (
-                    <>
-                        {/* Hero Section: Overall Score */}
-                        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-8 mb-8 shadow-xl">
-                            <HealthGauge score={health.overall_score} />
-                            <p className="text-center text-gray-500 text-sm mt-4 max-w-md mx-auto">
-                                Ocena zagregowana z: Altman Z-Score, Piotroski F-Score, wskaźniki finansowe, analiza cash flow
-                            </p>
-
-                            {/* Warnings */}
-                            {health.warnings.length > 0 && (
-                                <div className="mt-6 space-y-2">
-                                    {health.warnings.map((w, i) => (
-                                        <div key={i} className="bg-rose-500/10 border border-rose-500/20 rounded-lg p-3 text-rose-400 text-sm">
-                                            ⚠️ {w}
-                                        </div>
-                                    ))}
-                                </div>
-                            )}
+            <main className="relative z-10 max-w-7xl mx-auto px-8 py-8">
+                {/* Top Row: Gauge + Altman + Piotroski */}
+                <div className="grid grid-cols-3 gap-6 mb-6">
+                    {/* Overall Score */}
+                    <GlassCard className="p-6 text-center" glowColor="emerald">
+                        <div className="text-sm font-medium text-gray-400 uppercase tracking-wider mb-4">
+                            Ogólny wynik kondycji
                         </div>
+                        <HealthGauge score={overallScore} />
+                    </GlassCard>
 
-                        {/* Altman & Piotroski Row */}
-                        <div className="grid grid-cols-2 gap-6 mb-6">
-                            <AltmanZBar result={health.components.altman_z} />
-                            <PiotroskiFScore result={health.components.piotroski_f} />
-                        </div>
-
-                        {/* DuPont */}
-                        <div className="mb-6">
-                            <DuPontTree result={health.components.dupont} />
-                        </div>
-
-                        {/* Financial Ratios - 4 Columns */}
-                        <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
-                            <h3 className="text-lg font-semibold mb-6">📈 Wskaźniki Finansowe</h3>
-
-                            <div className="grid grid-cols-4 gap-6">
-                                {/* Liquidity */}
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                                        💧 Płynność
-                                    </div>
-                                    <div className="space-y-3">
-                                        {Object.entries(health.components.ratios.liquidity).map(([key, r]) => (
-                                            <RatioCard
-                                                key={key}
-                                                label={key.replace(/_/g, ' ')}
-                                                value={r.value}
-                                                unit="x"
-                                                status={r.status}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Solvency */}
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                                        🏦 Wypłacalność
-                                    </div>
-                                    <div className="space-y-3">
-                                        {Object.entries(health.components.ratios.solvency).map(([key, r]) => (
-                                            <RatioCard
-                                                key={key}
-                                                label={key.replace(/_/g, ' ')}
-                                                value={r.value}
-                                                unit="x"
-                                                status={r.status}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Profitability */}
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                                        💰 Rentowność
-                                    </div>
-                                    <div className="space-y-3">
-                                        {Object.entries(health.components.ratios.profitability).map(([key, r]) => (
-                                            <RatioCard
-                                                key={key}
-                                                label={key.replace(/_/g, ' ')}
-                                                value={r.value}
-                                                unit="%"
-                                                status={r.status}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
-
-                                {/* Efficiency */}
-                                <div>
-                                    <div className="text-xs text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1">
-                                        ⚡ Efektywność
-                                    </div>
-                                    <div className="space-y-3">
-                                        {Object.entries(health.components.ratios.efficiency).map(([key, r]) => (
-                                            <RatioCard
-                                                key={key}
-                                                label={key.replace(/_/g, ' ')}
-                                                value={r.value}
-                                                unit={key.includes('dso') ? ' dni' : 'x'}
-                                                status={r.status}
-                                            />
-                                        ))}
-                                    </div>
-                                </div>
+                    {/* Altman Z-Score */}
+                    <GlassCard className="p-6" glowColor="cyan">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-2xl">🔬</span>
+                            <div>
+                                <div className="font-semibold">ALTMAN Z-SCORE</div>
+                                <div className="text-xs text-gray-500">Prawdopodobieństwo bankructwa</div>
                             </div>
                         </div>
 
-                        {/* Beneish M-Score */}
-                        {health.components.beneish_m.score !== null && (
-                            <div className={`mt-6 p-4 rounded-lg border ${health.components.beneish_m.is_manipulator
-                                ? 'bg-rose-500/10 border-rose-500/30'
-                                : 'bg-emerald-500/10 border-emerald-500/30'
-                                }`}>
-                                <div className="flex items-center gap-3">
-                                    <span className="text-2xl">
-                                        {health.components.beneish_m.is_manipulator ? '🕵️' : '✓'}
-                                    </span>
-                                    <div>
-                                        <div className="font-semibold">
-                                            Beneish M-Score: {health.components.beneish_m.score}
-                                        </div>
-                                        <div className={`text-sm ${health.components.beneish_m.is_manipulator
-                                            ? 'text-rose-400'
-                                            : 'text-emerald-400'
-                                            }`}>
-                                            {health.components.beneish_m.label}
-                                        </div>
+                        {altmanData.z !== null ? (
+                            <>
+                                <AltmanZoneBar z={altmanData.z} />
+                                <div className="mt-4 text-center">
+                                    <div className="text-3xl font-mono font-bold">
+                                        Z = {altmanData.z.toFixed(2)}
+                                    </div>
+                                    <div className={`text-sm mt-1 ${altmanData.z >= 2.99 ? 'text-emerald-400' :
+                                            altmanData.z >= 1.81 ? 'text-amber-400' : 'text-rose-400'
+                                        }`}>
+                                        {getZLabel(altmanData.z)}
                                     </div>
                                 </div>
+
+                                {altmanData.components && (
+                                    <div className="mt-4 space-y-1 text-xs font-mono">
+                                        <div className="flex justify-between text-gray-400">
+                                            <span>A (WC/TA)</span>
+                                            <span>{altmanData.components.A.toFixed(3)} × 1.2 = {(1.2 * altmanData.components.A).toFixed(3)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-400">
+                                            <span>B (RE/TA)</span>
+                                            <span>{altmanData.components.B.toFixed(3)} × 1.4 = {(1.4 * altmanData.components.B).toFixed(3)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-400">
+                                            <span>C (EBIT/TA)</span>
+                                            <span>{altmanData.components.C.toFixed(3)} × 3.3 = {(3.3 * altmanData.components.C).toFixed(3)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-400">
+                                            <span>D (MC/TL)</span>
+                                            <span>{altmanData.components.D.toFixed(3)} × 0.6 = {(0.6 * altmanData.components.D).toFixed(3)}</span>
+                                        </div>
+                                        <div className="flex justify-between text-gray-400">
+                                            <span>E (Rev/TA)</span>
+                                            <span>{altmanData.components.E.toFixed(3)} × 1.0 = {(1.0 * altmanData.components.E).toFixed(3)}</span>
+                                        </div>
+                                    </div>
+                                )}
+                            </>
+                        ) : (
+                            <div className="bg-amber-500/10 border-l-4 border-amber-500 rounded-r-lg p-4">
+                                <div className="font-medium text-amber-400 mb-2">⚠️ Nie można obliczyć Altman Z-Score</div>
+                                <div className="text-sm text-gray-400">Brakujące dane:</div>
+                                <ul className="text-sm text-gray-500 mt-1">
+                                    {altmanData.missing.map((m, i) => (
+                                        <li key={i}>• {m}</li>
+                                    ))}
+                                </ul>
+                                <button
+                                    onClick={() => router.push('/valuation/load')}
+                                    className="mt-3 text-sm text-amber-400 hover:text-amber-300"
+                                >
+                                    Uzupełnij dane →
+                                </button>
                             </div>
                         )}
+                    </GlassCard>
 
-                        {/* Cash Flow Quality */}
-                        <div className="mt-6 bg-[#111827] rounded-xl border border-white/5 p-6">
-                            <h3 className="text-lg font-semibold mb-4">💎 Jakość Cash Flow</h3>
-                            <div className="grid grid-cols-3 gap-4">
-                                <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
-                                    <div className="text-xs text-gray-500 uppercase">Accrual Ratio</div>
-                                    <div className={`text-2xl font-mono ${health.components.cashflow_quality.accrual_ratio < 0
-                                        ? 'text-emerald-400'
-                                        : 'text-amber-400'
-                                        }`}>
-                                        {(health.components.cashflow_quality.accrual_ratio * 100).toFixed(1)}%
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {health.components.cashflow_quality.accrual_ratio < 0
-                                            ? '✓ Zyski poparte gotówką'
-                                            : '⚠️ Zyski > Cash Flow'}
-                                    </div>
-                                </div>
-                                <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
-                                    <div className="text-xs text-gray-500 uppercase">OCF / Net Income</div>
-                                    <div className={`text-2xl font-mono ${health.components.cashflow_quality.ocf_to_ni_ratio > 1
-                                        ? 'text-emerald-400'
-                                        : 'text-amber-400'
-                                        }`}>
-                                        {health.components.cashflow_quality.ocf_to_ni_ratio}x
-                                    </div>
-                                    <div className="text-xs text-gray-500 mt-1">
-                                        {health.components.cashflow_quality.ocf_to_ni_ratio > 1
-                                            ? '✓ Wysoka jakość'
-                                            : '⚠️ Niska jakość'}
-                                    </div>
-                                </div>
-                                <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
-                                    <div className="text-xs text-gray-500 uppercase">Free Cash Flow</div>
-                                    <div className={`text-2xl font-mono ${health.components.cashflow_quality.fcf_positive
-                                        ? 'text-emerald-400'
-                                        : 'text-rose-400'
-                                        }`}>
-                                        {health.components.cashflow_quality.fcf_positive ? '✓ Dodatni' : '✗ Ujemny'}
-                                    </div>
-                                </div>
+                    {/* Piotroski F-Score */}
+                    <GlassCard className="p-6" glowColor="purple">
+                        <div className="flex items-center gap-2 mb-4">
+                            <span className="text-2xl">📊</span>
+                            <div>
+                                <div className="font-semibold">PIOTROSKI F-SCORE</div>
+                                <div className="text-xs text-gray-500">Siła finansowa (0-9)</div>
                             </div>
                         </div>
 
-                        {/* Navigation */}
-                        <div className="mt-8 grid grid-cols-3 gap-4">
-                            <button
-                                onClick={() => router.push('/valuation/dividends')}
-                                className="bg-[#111827] hover:bg-[#1F2937] border border-white/5 py-4 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
-                            >
-                                <span className="text-2xl">💎</span>
-                                <div>
-                                    <div className="font-medium">Dywidendy & Buyback</div>
-                                    <div className="text-xs text-gray-500">Zwrot dla akcjonariuszy</div>
-                                </div>
-                            </button>
-                            <button
-                                onClick={() => router.push('/valuation/capital')}
-                                className="bg-[#111827] hover:bg-[#1F2937] border border-white/5 py-4 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
-                            >
-                                <span className="text-2xl">🏗️</span>
-                                <div>
-                                    <div className="font-medium">Struktura Kapitału</div>
-                                    <div className="text-xs text-gray-500">Dług i finansowanie</div>
-                                </div>
-                            </button>
-                            <button
-                                onClick={() => router.push('/valuation/dcf')}
-                                className="bg-emerald-600 hover:bg-emerald-500 py-4 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
-                            >
-                                <span className="text-2xl">💰</span>
-                                <div>
-                                    <div className="font-medium">Wycena DCF</div>
-                                    <div className="text-xs text-emerald-200">Monte Carlo</div>
-                                </div>
-                            </button>
+                        <div className="text-center mb-4">
+                            <span className={`text-4xl font-mono font-bold ${piotroskiData.score >= 7 ? 'text-emerald-400' :
+                                    piotroskiData.score >= 4 ? 'text-amber-400' : 'text-rose-400'
+                                }`}>
+                                {piotroskiData.score}/{piotroskiData.max > 0 ? 9 : '?'}
+                            </span>
+                            <div className={`text-sm mt-1 ${piotroskiData.score >= 7 ? 'text-emerald-400' :
+                                    piotroskiData.score >= 4 ? 'text-amber-400' : 'text-rose-400'
+                                }`}>
+                                {getScoreLabel(piotroskiData.score)}
+                            </div>
                         </div>
-                    </>
-                ) : (
-                    <div className="text-center py-20 text-gray-500">
-                        Nie udało się obliczyć wskaźników kondycji.
+
+                        <div className="space-y-1 max-h-48 overflow-y-auto">
+                            {piotroskiData.criteria.map((c, i) => (
+                                <div
+                                    key={i}
+                                    className={`
+                                        flex items-center justify-between p-2 rounded-lg text-xs
+                                        border-l-2 ${c.pass === true ? 'border-emerald-500 bg-emerald-500/10' :
+                                            c.pass === false ? 'border-rose-500 bg-rose-500/10' :
+                                                'border-gray-500 bg-gray-500/10'
+                                        }
+                                    `}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <span>{c.pass === true ? '✓' : c.pass === false ? '✗' : '?'}</span>
+                                        <span>{c.name}</span>
+                                    </span>
+                                    <span className="text-gray-500 text-right">
+                                        {c.detail || (c.missing ? `Brak: ${c.missing}` : '—')}
+                                    </span>
+                                </div>
+                            ))}
+                        </div>
+                    </GlassCard>
+                </div>
+
+                {/* Financial Ratios Grid */}
+                <GlassCard className="p-6" glowColor="amber">
+                    <div className="flex items-center gap-2 mb-6">
+                        <span className="text-2xl">📈</span>
+                        <div className="font-semibold text-lg">WSKAŹNIKI FINANSOWE</div>
                     </div>
-                )}
+
+                    <div className="grid grid-cols-4 gap-6">
+                        {/* Liquidity */}
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 uppercase mb-3">💧 Płynność</h4>
+                            <div className="space-y-3">
+                                {ratios.liquidity.map((r, i) => (
+                                    <RatioCard key={i} {...r} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Solvency */}
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 uppercase mb-3">🏛️ Wypłacalność</h4>
+                            <div className="space-y-3">
+                                {ratios.solvency.map((r, i) => (
+                                    <RatioCard key={i} {...r} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Profitability */}
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 uppercase mb-3">💰 Rentowność</h4>
+                            <div className="space-y-3">
+                                {ratios.profitability.map((r, i) => (
+                                    <RatioCard key={i} {...r} />
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Efficiency */}
+                        <div>
+                            <h4 className="text-sm font-medium text-gray-400 uppercase mb-3">⚡ Efektywność</h4>
+                            <div className="space-y-3">
+                                {ratios.efficiency.map((r, i) => (
+                                    <RatioCard key={i} {...r} />
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+                </GlassCard>
+
+                {/* Navigation */}
+                <div className="mt-6 grid grid-cols-3 gap-4">
+                    <button
+                        onClick={() => router.push('/valuation/dcf')}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
+                    >
+                        <div className="text-2xl mb-1">💰</div>
+                        <div className="font-medium">Wycena DCF</div>
+                    </button>
+                    <button
+                        onClick={() => router.push('/valuation/benchmark')}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
+                    >
+                        <div className="text-2xl mb-1">📈</div>
+                        <div className="font-medium">Porównawcza</div>
+                    </button>
+                    <button
+                        onClick={() => router.push('/valuation/sensitivity')}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
+                    >
+                        <div className="text-2xl mb-1">🔥</div>
+                        <div className="font-medium">Wrażliwość</div>
+                    </button>
+                </div>
             </main>
         </div>
     );

@@ -1,214 +1,335 @@
 'use client';
 
 // =============================================
-// StochFin - Sensitivity Analysis
-// WACC / Terminal Growth Heatmap
+// StochFin — Sensitivity Analysis
+// Based on MASTER_PROMPTS v3 specification
+// WACC × Terminal Growth heatmap
 // =============================================
 
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import type { CompanyFinancials } from '@/types/valuation';
+import {
+    useCompanyData,
+    getField,
+    getLatestYear,
+    getPreviousYear,
+    safeDivide,
+    formatNumber
+} from '@/contexts/CompanyDataContext';
+import EmptyState from '@/components/ui/EmptyState';
 
 // =============================================
-// Sensitivity Calculation
+// Glass Card Component
 // =============================================
 
-function calculateDCF(
-    revenue: number,
-    ebitdaMargin: number,
-    wacc: number,
-    terminalGrowth: number,
-    netDebt: number,
-    shares: number,
-    forecastYears: number = 5,
-    revenueGrowth: number = 0.05
-): number {
-    const depPercent = 0.15;
-    const taxRate = 0.21;
-    const capexRatio = 0.03;
-    const nwcRatio = 0.05;
-
-    let rev = revenue;
-    let prevRev = revenue;
-    let pvFCF = 0;
-
-    for (let y = 1; y <= forecastYears; y++) {
-        rev = rev * (1 + revenueGrowth);
-        const ebitda = rev * ebitdaMargin;
-        const dep = ebitda * depPercent;
-        const ebit = ebitda - dep;
-        const nopat = ebit * (1 - taxRate);
-        const capex = rev * capexRatio;
-        const deltaNWC = (rev - prevRev) * nwcRatio;
-        const fcf = nopat + dep - capex - deltaNWC;
-        pvFCF += fcf / Math.pow(1 + wacc, y);
-        prevRev = rev;
-    }
-
-    const terminalFCF = rev * ebitdaMargin * (1 - depPercent) * (1 - taxRate) * (1 + terminalGrowth);
-    const terminalValue = terminalFCF / (wacc - terminalGrowth);
-    const pvTerminal = terminalValue / Math.pow(1 + wacc, forecastYears);
-
-    const ev = pvFCF + pvTerminal;
-    const equity = Math.max(0, ev - netDebt);
-    return equity / shares;
+function GlassCard({
+    children,
+    className = ''
+}: {
+    children: React.ReactNode;
+    className?: string;
+}) {
+    return (
+        <div className={`
+            relative overflow-hidden rounded-2xl
+            bg-gradient-to-br from-white/[0.08] to-white/[0.02]
+            backdrop-blur-xl border border-white/[0.08]
+            shadow-xl shadow-black/20
+            ${className}
+        `}>
+            <div className="absolute inset-0 bg-gradient-to-br from-white/[0.05] via-transparent to-transparent pointer-events-none" />
+            <div className="relative z-10">{children}</div>
+        </div>
+    );
 }
 
 // =============================================
-// Sensitivity Page
+// Main Component
 // =============================================
 
 export default function SensitivityPage() {
     const router = useRouter();
-    const [data, setData] = useState<CompanyFinancials | null>(null);
-    const [loading, setLoading] = useState(true);
+    const { state } = useCompanyData();
 
-    // Sensitivity ranges
-    const [waccRange, setWaccRange] = useState([7, 8, 9, 10, 11, 12, 13]);
-    const [terminalGrowthRange, setTerminalGrowthRange] = useState([1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0]);
-    const [baseWacc, setBaseWacc] = useState(9);
-    const [baseTerminalGrowth, setBaseTerminalGrowth] = useState(2.5);
+    const y0 = getLatestYear(state);
+    const y1 = getPreviousYear(state);
+    const currency = state.currency || 'PLN';
+    const companyName = state.companyName || 'Brak danych';
 
-    useEffect(() => {
-        const stored = localStorage.getItem('stochfin_company_data');
-        if (stored) {
-            setData(JSON.parse(stored));
+    // Base parameters with sliders
+    const [baseWACC, setBaseWACC] = useState(9.0);
+    const [baseTermGrowth, setBaseTermGrowth] = useState(2.5);
+
+    // Guard: if no data loaded
+    if (!state.dataLoaded || !y0) {
+        return (
+            <div className="min-h-screen bg-[#030712] text-white">
+                <EmptyState
+                    message="Brak załadowanych danych"
+                    description="Załaduj dane spółki aby przeprowadzić analizę wrażliwości"
+                    ctaText="📡 Załaduj dane"
+                    onCta={() => router.push('/valuation/load')}
+                    icon="🔥"
+                />
+            </div>
+        );
+    }
+
+    // Guard: require DCF results
+    if (!state.dcfResults) {
+        return (
+            <div className="min-h-screen bg-[#030712] text-white">
+                <EmptyState
+                    message="Najpierw uruchom symulację DCF"
+                    description="Analiza wrażliwości wymaga wcześniejszego przeprowadzenia wyceny Monte Carlo DCF"
+                    ctaText="💰 Przejdź do DCF"
+                    onCta={() => router.push('/valuation/dcf')}
+                    icon="📊"
+                />
+            </div>
+        );
+    }
+
+    // Get required data
+    const lastRevenue = getField(state, 'incomeStatement', y0, 'revenue');
+    if (!lastRevenue) {
+        return (
+            <div className="min-h-screen bg-[#030712] text-white">
+                <EmptyState
+                    message="Brak danych o przychodach"
+                    description="Uzupełnij dane o przychodach aby przeprowadzić analizę wrażliwości"
+                    ctaText="📡 Uzupełnij dane"
+                    onCta={() => router.push('/valuation/load')}
+                    icon="📊"
+                />
+            </div>
+        );
+    }
+
+    // Calculate margins and ratios from historical data
+    const ebitdaMargin = safeDivide(
+        getField(state, 'incomeStatement', y0, 'ebitda'),
+        lastRevenue
+    ) || 0.20;
+
+    const daRatio = safeDivide(
+        getField(state, 'incomeStatement', y0, 'depreciation'),
+        lastRevenue
+    ) || 0.03;
+
+    const totalDebt = getField(state, 'balanceSheet', y0, 'totalDebt')
+        || getField(state, 'balanceSheet', y0, 'longTermDebt') || 0;
+    const cash = getField(state, 'balanceSheet', y0, 'cash') || 0;
+    const netDebt = totalDebt - cash;
+
+    const shares = state.market.sharesOutstanding
+        || getField(state, 'balanceSheet', y0, 'sharesOutstanding');
+
+    // Historical growth rate
+    const prevRevenue = y1 ? getField(state, 'incomeStatement', y1, 'revenue') : null;
+    const growthRate = safeDivide(
+        lastRevenue - (prevRevenue || lastRevenue),
+        prevRevenue || lastRevenue
+    ) || 0.05;
+
+    // Generate ranges for heatmap
+    const waccRange: number[] = [];
+    for (let w = Math.max(baseWACC - 3, 4); w <= baseWACC + 3; w += 1) {
+        waccRange.push(w);
+    }
+    const tgRange = [1.0, 1.5, 2.0, 2.5, 3.0, 3.5, 4.0];
+
+    // Compute DCF value for a given WACC and terminal growth
+    const computeDCFValue = (wacc: number, tg: number): number | null => {
+        const w = wacc / 100;
+        const g = tg / 100;
+
+        if (w <= g) return null;
+        if (w <= 0) return null;
+
+        const projYears = 5;
+        let revenue = lastRevenue;
+        let pvFCF = 0;
+        let lastFCF = 0;
+
+        for (let t = 1; t <= projYears; t++) {
+            revenue = revenue * (1 + growthRate);
+            const ebitda = revenue * ebitdaMargin;
+            const da = revenue * daRatio;
+            const fcf = ebitda - da;
+            pvFCF += fcf / Math.pow(1 + w, t);
+            lastFCF = fcf;
         }
-        setLoading(false);
-    }, []);
 
-    // Calculate matrix
+        const tv = (lastFCF * (1 + g)) / (w - g);
+        const pvTV = tv / Math.pow(1 + w, projYears);
+        const ev = pvFCF + pvTV;
+        const equity = ev - netDebt;
+
+        if (shares) return equity / shares;
+        return equity;
+    };
+
+    // Build matrix
     const matrix = useMemo(() => {
-        if (!data) return [];
-
-        const latestYear = data.statements?.income_statement?.periods?.[0] || '';
-        const revenue = data.statements?.income_statement?.data?.revenue?.[latestYear] || 0;
-        const ebitda = data.statements?.income_statement?.data?.ebitda?.[latestYear] || 0;
-        const ebitdaMargin = revenue > 0 ? ebitda / revenue : 0.3;
-        const netDebt = (data.statements?.balance_sheet?.data?.long_term_debt?.[latestYear] || 0) -
-            (data.statements?.balance_sheet?.data?.cash?.[latestYear] || 0);
-        const shares = data.shares_outstanding || 1000000000;
-
-        return terminalGrowthRange.map(tg =>
-            waccRange.map(wacc =>
-                calculateDCF(revenue, ebitdaMargin, wacc / 100, tg / 100, netDebt, shares)
-            )
+        return tgRange.map(tg =>
+            waccRange.map(wacc => computeDCFValue(wacc, tg))
         );
-    }, [data, waccRange, terminalGrowthRange]);
+    }, [baseWACC, baseTermGrowth, lastRevenue, growthRate, ebitdaMargin, daRatio, netDebt, shares]);
 
-    // Find min/max for color scaling
-    const allValues = matrix.flat();
-    const minValue = Math.min(...allValues);
-    const maxValue = Math.max(...allValues);
-    const valueRange = maxValue - minValue;
+    // Get all valid values for color scaling
+    const allValues = matrix.flat().filter((v): v is number => v !== null);
+    const minVal = allValues.length > 0 ? Math.min(...allValues) : 0;
+    const maxVal = allValues.length > 0 ? Math.max(...allValues) : 100;
 
-    // Color scale: red (low) -> yellow (mid) -> green (high)
-    const getColor = (value: number) => {
-        const normalized = (value - minValue) / valueRange;
-        if (normalized < 0.5) {
-            const r = 239;
-            const g = Math.round(68 + (normalized * 2) * (180 - 68));
-            const b = 68;
-            return `rgb(${r}, ${g}, ${b})`;
-        } else {
-            const r = Math.round(239 - ((normalized - 0.5) * 2) * (239 - 16));
-            const g = Math.round(180 + ((normalized - 0.5) * 2) * (185 - 180));
-            const b = Math.round(68 + ((normalized - 0.5) * 2) * (129 - 68));
-            return `rgb(${r}, ${g}, ${b})`;
+    // Color based on market price comparison
+    const currentPrice = state.market.currentPrice;
+
+    const getCellColor = (value: number | null): string => {
+        if (value === null) return 'bg-gray-800';
+
+        if (!currentPrice) {
+            // No market price: use gradient from min to max
+            const pct = (value - minVal) / (maxVal - minVal);
+            if (pct >= 0.8) return 'bg-emerald-900';
+            if (pct >= 0.6) return 'bg-emerald-800/70';
+            if (pct >= 0.4) return 'bg-gray-700';
+            if (pct >= 0.2) return 'bg-rose-800/70';
+            return 'bg-rose-900';
         }
+
+        const diff = (value - currentPrice) / currentPrice;
+        if (diff > 0.20) return 'bg-emerald-800';
+        if (diff > 0.05) return 'bg-emerald-700/70';
+        if (diff > -0.05) return 'bg-amber-800/50';
+        if (diff > -0.20) return 'bg-rose-700/70';
+        return 'bg-rose-800';
     };
-
-    // Text color based on background brightness
-    const getTextColor = (bgColor: string) => {
-        const match = bgColor.match(/rgb\((\d+), (\d+), (\d+)\)/);
-        if (!match) return 'white';
-        const [, r, g, b] = match.map(Number);
-        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
-        return brightness > 128 ? '#0A0E17' : 'white';
-    };
-
-    if (loading) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex items-center justify-center">
-                <div className="animate-pulse text-gray-400">Ładowanie...</div>
-            </div>
-        );
-    }
-
-    if (!data) {
-        return (
-            <div className="min-h-screen bg-[#06090F] flex flex-col items-center justify-center gap-4 text-white">
-                <p className="text-gray-400">Brak załadowanych danych</p>
-                <button onClick={() => router.push('/valuation/load')} className="bg-cyan-600 px-6 py-2 rounded-lg text-sm">
-                    Załaduj dane
-                </button>
-            </div>
-        );
-    }
 
     return (
-        <div className="min-h-screen bg-[#06090F] text-white">
+        <div className="min-h-screen bg-[#030712] text-white overflow-hidden">
+            {/* Animated Background */}
+            <div className="fixed inset-0 pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-amber-500/5 rounded-full blur-[120px] animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-rose-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
+            </div>
+
             {/* Header */}
-            <header className="border-b border-white/5 bg-[#0A0E17]">
-                <div className="max-w-7xl mx-auto px-8 py-6">
-                    <button onClick={() => router.push('/valuation/dcf')} className="text-gray-500 hover:text-white text-sm mb-2">
+            <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
+                <div className="max-w-6xl mx-auto px-8 py-6">
+                    <button
+                        onClick={() => router.push('/valuation/dcf')}
+                        className="text-gray-500 hover:text-white text-sm mb-2 transition-colors"
+                    >
                         ← Powrót do DCF
                     </button>
-                    <h1 className="text-2xl font-bold font-mono">
-                        Analiza Wrażliwości
-                        <span className="text-gray-400 ml-3">({data.ticker})</span>
+                    <h1 className="text-2xl font-mono font-bold">
+                        Analiza Wrażliwości — {companyName}
                     </h1>
+                    <div className="text-sm text-gray-500 mt-1">
+                        Macierz WACC × Terminal Growth
+                    </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="max-w-5xl mx-auto px-8 py-8">
+            <main className="relative z-10 max-w-6xl mx-auto px-8 py-8">
+                {/* Parameters */}
+                <GlassCard className="p-6 mb-6">
+                    <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                        <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-sm">⚙️</span>
+                        Parametry bazowe
+                    </h2>
+
+                    <div className="grid grid-cols-2 gap-8">
+                        {/* WACC Slider */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm text-gray-400">Bazowy WACC</label>
+                                <span className="text-lg font-mono font-bold text-amber-400">{baseWACC.toFixed(1)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="4"
+                                max="20"
+                                step="0.5"
+                                value={baseWACC}
+                                onChange={(e) => setBaseWACC(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                            <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>4%</span>
+                                <span>12%</span>
+                                <span>20%</span>
+                            </div>
+                        </div>
+
+                        {/* Terminal Growth Slider */}
+                        <div>
+                            <div className="flex items-center justify-between mb-2">
+                                <label className="text-sm text-gray-400">Bazowy Terminal Growth</label>
+                                <span className="text-lg font-mono font-bold text-amber-400">{baseTermGrowth.toFixed(1)}%</span>
+                            </div>
+                            <input
+                                type="range"
+                                min="0.5"
+                                max="5.0"
+                                step="0.5"
+                                value={baseTermGrowth}
+                                onChange={(e) => setBaseTermGrowth(parseFloat(e.target.value))}
+                                className="w-full h-2 bg-white/10 rounded-lg appearance-none cursor-pointer accent-amber-500"
+                            />
+                            <div className="flex justify-between text-xs text-gray-500 mt-1">
+                                <span>0.5%</span>
+                                <span>2.5%</span>
+                                <span>5%</span>
+                            </div>
+                        </div>
+                    </div>
+                </GlassCard>
+
                 {/* Heatmap */}
-                <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
-                    <h2 className="text-lg font-semibold mb-6">Macierz WACC / Terminal Growth</h2>
+                <GlassCard className="p-6">
+                    <h2 className="text-lg font-semibold flex items-center gap-2 mb-6">
+                        <span className="w-8 h-8 rounded-lg bg-gradient-to-br from-rose-500 to-orange-600 flex items-center justify-center text-sm">🔥</span>
+                        Macierz WACC / Terminal Growth
+                    </h2>
 
                     <div className="overflow-x-auto">
-                        <table className="w-full">
+                        <table className="w-full text-sm">
                             <thead>
                                 <tr>
-                                    <th className="p-2 text-right text-xs text-gray-500">
-                                        <div>Terminal ↓</div>
-                                        <div>WACC →</div>
-                                    </th>
-                                    {waccRange.map(wacc => (
+                                    <th className="p-3 text-left text-gray-500 font-normal">Terminal ↓ / WACC →</th>
+                                    {waccRange.map(w => (
                                         <th
-                                            key={wacc}
-                                            className={`p-2 text-center text-xs font-mono ${wacc === baseWacc ? 'text-cyan-400 font-bold' : 'text-gray-400'
-                                                }`}
+                                            key={w}
+                                            className={`p-3 text-center font-mono ${w === baseWACC ? 'text-amber-400 font-bold' : 'text-gray-400'}`}
                                         >
-                                            {wacc.toFixed(0)}%
+                                            {w}%
                                         </th>
                                     ))}
                                 </tr>
                             </thead>
                             <tbody>
-                                {terminalGrowthRange.map((tg, rowIdx) => (
+                                {tgRange.map((tg, i) => (
                                     <tr key={tg}>
-                                        <td className={`p-2 text-right text-xs font-mono ${tg === baseTerminalGrowth ? 'text-cyan-400 font-bold' : 'text-gray-400'
-                                            }`}>
+                                        <td className={`p-3 font-mono ${tg === baseTermGrowth ? 'text-amber-400 font-bold' : 'text-gray-400'}`}>
                                             {tg.toFixed(1)}%
                                         </td>
-                                        {waccRange.map((wacc, colIdx) => {
-                                            const value = matrix[rowIdx]?.[colIdx] || 0;
-                                            const bgColor = getColor(value);
-                                            const isBase = wacc === baseWacc && tg === baseTerminalGrowth;
+                                        {waccRange.map((w, j) => {
+                                            const val = matrix[i][j];
+                                            const isBase = w === baseWACC && tg === baseTermGrowth;
 
                                             return (
                                                 <td
-                                                    key={wacc}
-                                                    className={`p-3 text-center font-mono text-sm transition-all ${isBase ? 'ring-2 ring-cyan-400' : ''
-                                                        }`}
-                                                    style={{
-                                                        backgroundColor: bgColor,
-                                                        color: getTextColor(bgColor)
-                                                    }}
+                                                    key={w}
+                                                    className={`
+                                                        p-3 text-center font-mono text-sm transition-colors
+                                                        ${getCellColor(val)}
+                                                        ${isBase ? 'ring-2 ring-amber-500 ring-offset-2 ring-offset-gray-900' : ''}
+                                                    `}
                                                 >
-                                                    ${value.toFixed(0)}
+                                                    {val !== null ? formatNumber(val, '') : '—'}
                                                 </td>
                                             );
                                         })}
@@ -220,86 +341,53 @@ export default function SensitivityPage() {
 
                     {/* Legend */}
                     <div className="flex items-center justify-center gap-4 mt-6 text-xs">
-                        <span className="text-gray-500">Niska wartość</span>
-                        <div className="flex h-4 w-32 rounded overflow-hidden">
-                            <div className="flex-1 bg-rose-500" />
-                            <div className="flex-1 bg-amber-400" />
-                            <div className="flex-1 bg-emerald-500" />
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-rose-800" />
+                            <span className="text-gray-400">Niska wartość</span>
                         </div>
-                        <span className="text-gray-500">Wysoka wartość</span>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-amber-800/50" />
+                            <span className="text-gray-400">Neutralna</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <div className="w-4 h-4 rounded bg-emerald-800" />
+                            <span className="text-gray-400">Wysoka wartość</span>
+                        </div>
+                        {currentPrice && (
+                            <div className="ml-4 text-gray-500">
+                                vs cena rynkowa: {formatNumber(currentPrice, currency)}
+                            </div>
+                        )}
                     </div>
 
-                    {/* Market Price Reference */}
-                    {data.current_price && (
-                        <div className="text-center mt-4 text-sm text-gray-400">
-                            Aktualna cena rynkowa: <span className="font-mono text-rose-400">${data.current_price.toFixed(2)}</span>
-                        </div>
-                    )}
-                </div>
-
-                {/* Range Controls */}
-                <div className="bg-[#111827] rounded-xl border border-white/5 p-6 mt-6">
-                    <h2 className="text-lg font-semibold mb-4">Parametry bazowe</h2>
-
-                    <div className="grid grid-cols-2 gap-6">
-                        <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">
-                                Bazowy WACC
-                            </label>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="range"
-                                    min={5}
-                                    max={15}
-                                    step={0.5}
-                                    value={baseWacc}
-                                    onChange={e => setBaseWacc(parseFloat(e.target.value))}
-                                    className="flex-1 accent-cyan-500"
-                                />
-                                <span className="font-mono w-12 text-right">{baseWacc}%</span>
-                            </div>
-                        </div>
-                        <div>
-                            <label className="block text-xs text-gray-500 uppercase tracking-wider mb-2">
-                                Bazowy Terminal Growth
-                            </label>
-                            <div className="flex items-center gap-3">
-                                <input
-                                    type="range"
-                                    min={0.5}
-                                    max={5}
-                                    step={0.5}
-                                    value={baseTerminalGrowth}
-                                    onChange={e => setBaseTerminalGrowth(parseFloat(e.target.value))}
-                                    className="flex-1 accent-cyan-500"
-                                />
-                                <span className="font-mono w-12 text-right">{baseTerminalGrowth}%</span>
-                            </div>
-                        </div>
+                    {/* Base value highlight */}
+                    <div className="mt-4 text-center">
+                        <span className="text-gray-500">Wartość bazowa (WACC {baseWACC}%, TG {baseTermGrowth}%): </span>
+                        <span className="font-mono font-bold text-amber-400">
+                            {computeDCFValue(baseWACC, baseTermGrowth) !== null
+                                ? formatNumber(computeDCFValue(baseWACC, baseTermGrowth)!, currency)
+                                : '—'
+                            }
+                        </span>
+                        {shares ? ' / akcję' : ''}
                     </div>
-                </div>
+                </GlassCard>
 
                 {/* Navigation */}
-                <div className="mt-6 flex gap-4">
+                <div className="mt-6 grid grid-cols-2 gap-4">
                     <button
-                        onClick={() => router.push('/valuation/comps')}
-                        className="flex-1 bg-[#111827] hover:bg-[#1F2937] border border-white/5 py-3 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
+                        onClick={() => router.push('/valuation/benchmark')}
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
                     >
-                        <span className="text-xl">📈</span>
-                        <div>
-                            <div className="font-medium">Wycena Porównawcza</div>
-                            <div className="text-xs text-gray-500">Peer Group</div>
-                        </div>
+                        <div className="text-2xl mb-1">📈</div>
+                        <div className="font-medium">Wycena Porównawcza</div>
                     </button>
                     <button
                         onClick={() => router.push('/valuation/dcf')}
-                        className="flex-1 bg-emerald-600 hover:bg-emerald-500 py-3 px-4 rounded-lg text-left transition-colors flex items-center gap-3"
+                        className="p-4 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-center"
                     >
-                        <span className="text-xl">💰</span>
-                        <div>
-                            <div className="font-medium">Powrót do DCF</div>
-                            <div className="text-xs text-emerald-200">Monte Carlo</div>
-                        </div>
+                        <div className="text-2xl mb-1">💰</div>
+                        <div className="font-medium">Powrót do DCF</div>
                     </button>
                 </div>
             </main>

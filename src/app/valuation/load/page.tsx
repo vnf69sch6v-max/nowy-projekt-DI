@@ -1,17 +1,61 @@
 'use client';
 
 // =============================================
-// StochFin - Premium Data Loading Page
-// Modern fintech UI with animated cards
+// StochFin — Load Company Data Screen
+// Based on MASTER_PROMPTS v3 specification
+// 3 tabs with ~20 fields for complete financial data
 // =============================================
 
-import { useState } from 'react';
+import { useState, useCallback, useRef } from 'react';
 import { useRouter } from 'next/navigation';
+import { useCompanyData } from '@/contexts/CompanyDataContext';
 
+// =============================================
+// Types
+// =============================================
+
+type TabType = 'income' | 'balance' | 'cashflow';
 type LoadingStep = { label: string; done: boolean };
 
+interface YearData {
+    year: string;
+    // Income Statement
+    revenue: string;
+    costOfRevenue: string;
+    ebitda: string;
+    depreciation: string;
+    ebit: string;
+    interestExpense: string;
+    netIncome: string;
+    // Balance Sheet
+    totalAssets: string;
+    currentAssets: string;
+    cash: string;
+    inventory: string;
+    receivables: string;
+    totalLiabilities: string;
+    currentLiabilities: string;
+    longTermDebt: string;
+    totalEquity: string;
+    retainedEarnings: string;
+    // Cash Flow
+    operatingCF: string;
+    capex: string;
+    dividendsPaid: string;
+}
+
+const emptyYearData = (year: string): YearData => ({
+    year,
+    revenue: '', costOfRevenue: '', ebitda: '', depreciation: '',
+    ebit: '', interestExpense: '', netIncome: '',
+    totalAssets: '', currentAssets: '', cash: '', inventory: '',
+    receivables: '', totalLiabilities: '', currentLiabilities: '',
+    longTermDebt: '', totalEquity: '', retainedEarnings: '',
+    operatingCF: '', capex: '', dividendsPaid: ''
+});
+
 // =============================================
-// Premium Glass Card
+// Glass Card Component
 // =============================================
 
 function GlassCard({
@@ -55,7 +99,6 @@ function GlassCard({
                 ${className}
             `}
         >
-            {/* Premium inner glow */}
             <div className="absolute inset-0 bg-gradient-to-br from-white/[0.03] via-transparent to-transparent pointer-events-none" />
             <div className="relative z-10">{children}</div>
         </div>
@@ -92,96 +135,49 @@ function FeatureIcon({
 }
 
 // =============================================
-// Premium Input
+// Number Input Row
 // =============================================
 
-function PremiumInput({
-    type = 'text',
-    value,
+function NumberInputRow({
+    label,
+    values,
+    field,
     onChange,
-    placeholder,
-    disabled = false,
-    className = ''
+    computed = false
 }: {
-    type?: string;
-    value: string;
-    onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-    placeholder?: string;
-    disabled?: boolean;
-    className?: string;
+    label: string;
+    values: YearData[];
+    field: keyof YearData;
+    onChange: (yearIdx: number, value: string) => void;
+    computed?: boolean;
 }) {
     return (
-        <input
-            type={type}
-            value={value}
-            onChange={onChange}
-            placeholder={placeholder}
-            disabled={disabled}
-            className={`
-                w-full px-4 py-3 rounded-xl
-                bg-black/30 backdrop-blur-sm
-                border border-white/10
-                text-white placeholder-gray-500
-                focus:border-white/30 focus:outline-none focus:ring-2 focus:ring-white/10
-                transition-all duration-200
-                disabled:opacity-50 disabled:cursor-not-allowed
-                ${className}
-            `}
-        />
+        <div className="grid grid-cols-4 gap-4 items-center py-2 border-b border-white/5">
+            <div className="text-sm text-gray-400">{label}</div>
+            {values.map((yearData, idx) => (
+                <input
+                    key={yearData.year}
+                    type="number"
+                    step="0.1"
+                    value={yearData[field]}
+                    onChange={(e) => onChange(idx, e.target.value)}
+                    placeholder="0"
+                    className={`
+                        w-full px-3 py-2 rounded-lg text-right font-mono text-sm
+                        bg-black/30 border border-white/10
+                        ${computed ? 'bg-emerald-500/5 text-emerald-400 cursor-not-allowed' : 'text-white'}
+                        focus:border-emerald-500/50 focus:outline-none
+                        transition-all duration-200
+                    `}
+                    disabled={computed}
+                />
+            ))}
+        </div>
     );
 }
 
 // =============================================
-// Premium Button
-// =============================================
-
-function PremiumButton({
-    children,
-    onClick,
-    disabled = false,
-    variant = 'primary',
-    size = 'md',
-    className = ''
-}: {
-    children: React.ReactNode;
-    onClick?: () => void;
-    disabled?: boolean;
-    variant?: 'primary' | 'secondary' | 'gradient';
-    size?: 'sm' | 'md' | 'lg';
-    className?: string;
-}) {
-    const variantStyles = {
-        primary: 'bg-gradient-to-r from-cyan-600 to-blue-600 hover:from-cyan-500 hover:to-blue-500 text-white shadow-lg shadow-cyan-500/25',
-        secondary: 'bg-white/10 hover:bg-white/20 text-white border border-white/10',
-        gradient: 'bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-500/25'
-    };
-
-    const sizeStyles = {
-        sm: 'px-4 py-2 text-sm',
-        md: 'px-6 py-3 text-sm',
-        lg: 'px-8 py-4 text-base'
-    };
-
-    return (
-        <button
-            onClick={onClick}
-            disabled={disabled}
-            className={`
-                rounded-xl font-medium transition-all duration-300
-                disabled:opacity-50 disabled:cursor-not-allowed
-                hover:scale-[1.02] active:scale-[0.98]
-                ${variantStyles[variant]}
-                ${sizeStyles[size]}
-                ${className}
-            `}
-        >
-            {children}
-        </button>
-    );
-}
-
-// =============================================
-// Loading Step Indicator
+// Loading Steps Indicator
 // =============================================
 
 function LoadingSteps({ steps }: { steps: LoadingStep[] }) {
@@ -194,16 +190,15 @@ function LoadingSteps({ steps }: { steps: LoadingStep[] }) {
                         flex items-center gap-3 p-3 rounded-lg transition-all duration-300
                         ${step.done ? 'bg-emerald-500/10' : 'bg-white/5'}
                     `}
-                    style={{ animationDelay: `${idx * 100}ms` }}
                 >
                     {step.done ? (
                         <div className="w-6 h-6 rounded-full bg-emerald-500 flex items-center justify-center">
-                            <span className="text-white text-sm">✓</span>
+                            <span className="text-white text-xs">✓</span>
                         </div>
                     ) : (
-                        <div className="w-6 h-6 rounded-full border-2 border-cyan-500/50 border-t-cyan-500 animate-spin" />
+                        <div className="w-6 h-6 rounded-full border-2 border-white/20 border-t-emerald-500 animate-spin" />
                     )}
-                    <span className={step.done ? 'text-emerald-300' : 'text-white'}>
+                    <span className={step.done ? 'text-emerald-400' : 'text-gray-400'}>
                         {step.label}
                     </span>
                 </div>
@@ -213,393 +208,680 @@ function LoadingSteps({ steps }: { steps: LoadingStep[] }) {
 }
 
 // =============================================
-// Main Page Component
+// Main Component
 // =============================================
 
 export default function LoadDataPage() {
     const router = useRouter();
+    const { dispatch } = useCompanyData();
 
-    // API fetch state
+    // Company info state
+    const [companyName, setCompanyName] = useState('');
     const [ticker, setTicker] = useState('');
-    const [apiLoading, setApiLoading] = useState(false);
-    const [apiSteps, setApiSteps] = useState<LoadingStep[]>([]);
-    const [apiError, setApiError] = useState<string | null>(null);
+    const [currency, setCurrency] = useState('PLN');
+
+    // Market data state
+    const [stockPrice, setStockPrice] = useState('');
+    const [sharesMillions, setSharesMillions] = useState('');
+
+    // Financial data state (3 years)
+    const [years, setYears] = useState<YearData[]>([
+        emptyYearData('2024'),
+        emptyYearData('2023'),
+        emptyYearData('2022')
+    ]);
+
+    // UI state
+    const [activeTab, setActiveTab] = useState<TabType>('income');
+    const [tickerInput, setTickerInput] = useState('');
+    const [isLoading, setIsLoading] = useState(false);
+    const [loadingSteps, setLoadingSteps] = useState<LoadingStep[]>([]);
+    const [error, setError] = useState('');
 
     // File upload state
-    const [uploadedFile, setUploadedFile] = useState<File | null>(null);
-    const [uploadProgress, setUploadProgress] = useState(0);
-    const [uploadLoading, setUploadLoading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
+    const [selectedFile, setSelectedFile] = useState<File | null>(null);
+    const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
+    const [isDragging, setIsDragging] = useState(false);
 
-    // Manual input state
-    const [manualData, setManualData] = useState({
-        company_name: '',
-        currency: 'PLN',
-        years: ['2024', '2023', '2022'],
-        revenue: {} as Record<string, string>,
-        ebitda: {} as Record<string, string>,
-        net_income: {} as Record<string, string>
-    });
+    // Update year data
+    const updateYearData = useCallback((yearIdx: number, field: keyof YearData, value: string) => {
+        setYears(prev => prev.map((y, i) => i === yearIdx ? { ...y, [field]: value } : y));
+    }, []);
 
-    // =============================================
-    // Handlers
-    // =============================================
+    // File upload handlers
+    const handleDragOver = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    }, []);
 
-    const handleFetchFromAPI = async () => {
-        if (!ticker.trim()) return;
+    const handleDragLeave = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    }, []);
 
-        setApiLoading(true);
-        setApiError(null);
-        setApiSteps([
-            { label: 'Fetching company profile...', done: false },
-            { label: 'Loading income statement...', done: false },
-            { label: 'Loading balance sheet...', done: false },
-            { label: 'Loading cash flow...', done: false },
-            { label: 'Loading market data...', done: false }
-        ]);
-
-        for (let i = 0; i < 5; i++) {
-            await new Promise(r => setTimeout(r, 400));
-            setApiSteps(prev => prev.map((s, idx) =>
-                idx === i ? { ...s, done: true } : s
-            ));
-        }
+    const processFile = useCallback(async (file: File) => {
+        setSelectedFile(file);
+        setUploadStatus('uploading');
+        setError('');
 
         try {
-            const res = await fetch('/api/financials/fetch', {
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const response = await fetch('/api/valuation/upload', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ticker: ticker.trim(), source: 'fmp' })
+                body: formData
             });
 
-            const result = await res.json();
+            const result = await response.json();
 
-            if (!res.ok) {
-                setApiError(result.error || 'Failed to fetch data');
-                setApiLoading(false);
-                return;
+            if (!result.success) {
+                throw new Error(result.error || 'Upload failed');
             }
 
-            localStorage.setItem('stochfin_company_data', JSON.stringify(result.data));
-            router.push('/valuation/dcf');
+            const data = result.data;
 
-        } catch {
-            setApiError('Network error. Try again.');
-            setApiLoading(false);
+            // Save extracted data to context
+            dispatch({
+                type: 'SET_COMPANY_INFO',
+                payload: {
+                    companyName: data.companyName || 'Uploaded Company',
+                    ticker: data.ticker || '',
+                    currency: data.currency || 'PLN',
+                    dataSource: 'pdf',
+                    sourceLabel: '📄 PDF Upload'
+                }
+            });
+
+            if (data.years && data.years.length > 0) {
+                dispatch({
+                    type: 'SET_ALL_YEARS_DATA',
+                    payload: {
+                        incomeStatement: data.incomeStatement || {},
+                        balanceSheet: data.balanceSheet || {},
+                        cashFlow: data.cashFlow || {},
+                        availableYears: data.years
+                    }
+                });
+            }
+
+            setUploadStatus('success');
+
+            // Navigate to DCF after short delay
+            setTimeout(() => {
+                router.push('/valuation/dcf');
+            }, 1000);
+
+        } catch (err) {
+            setUploadStatus('error');
+            setError(err instanceof Error ? err.message : 'Błąd przetwarzania pliku');
         }
-    };
+    }, [dispatch, router]);
 
-    const handleFileDrop = async (e: React.DragEvent) => {
-        e.preventDefault();
-        const file = e.dataTransfer.files[0];
-        if (file) {
-            setUploadedFile(file);
-            await processFile(file);
-        }
-    };
-
-    const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (file) {
-            setUploadedFile(file);
-            await processFile(file);
+            processFile(file);
         }
-    };
+    }, [processFile]);
 
-    const processFile = async (file: File) => {
-        setUploadLoading(true);
-        setUploadProgress(0);
+    const handleDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+        const file = e.dataTransfer.files?.[0];
+        if (file) {
+            processFile(file);
+        }
+    }, [processFile]);
 
-        for (let i = 0; i <= 100; i += 10) {
-            await new Promise(r => setTimeout(r, 200));
-            setUploadProgress(i);
+    // Fetch from API
+    const handleFetch = async () => {
+        if (!tickerInput.trim()) {
+            setError('Wpisz ticker spółki');
+            return;
         }
 
-        setUploadLoading(false);
-    };
+        setIsLoading(true);
+        setError('');
+        setLoadingSteps([
+            { label: 'Łączenie z API...', done: false },
+            { label: 'Pobieranie profilu spółki...', done: false },
+            { label: 'Pobieranie Income Statement...', done: false },
+            { label: 'Pobieranie Balance Sheet...', done: false },
+            { label: 'Pobieranie Cash Flow...', done: false }
+        ]);
 
-    const handleManualSave = () => {
-        const data = {
-            source: 'manual',
-            source_type: 'manual',
-            fetched_at: new Date().toISOString(),
-            ticker: '',
-            company_name: manualData.company_name,
-            currency: manualData.currency,
-            statements: {
-                income_statement: {
-                    periods: manualData.years,
-                    data: {
-                        revenue: Object.fromEntries(
-                            manualData.years.map(y => [y, parseFloat(manualData.revenue[y]) || null])
-                        ),
-                        ebitda: Object.fromEntries(
-                            manualData.years.map(y => [y, parseFloat(manualData.ebitda[y]) || null])
-                        ),
-                        net_income: Object.fromEntries(
-                            manualData.years.map(y => [y, parseFloat(manualData.net_income[y]) || null])
-                        )
-                    }
-                }
+        try {
+            // Step 1
+            await new Promise(r => setTimeout(r, 300));
+            setLoadingSteps(s => s.map((st, i) => i === 0 ? { ...st, done: true } : st));
+
+            // Fetch from API
+            const response = await fetch(`/api/financials/fetch?ticker=${encodeURIComponent(tickerInput.trim())}`);
+
+            if (!response.ok) {
+                throw new Error('Nie znaleziono tickera. Sprawdź pisownię.');
             }
+
+            const data = await response.json();
+
+            // Step 2
+            setLoadingSteps(s => s.map((st, i) => i <= 1 ? { ...st, done: true } : st));
+            await new Promise(r => setTimeout(r, 200));
+
+            // Step 3
+            setLoadingSteps(s => s.map((st, i) => i <= 2 ? { ...st, done: true } : st));
+            await new Promise(r => setTimeout(r, 200));
+
+            // Step 4
+            setLoadingSteps(s => s.map((st, i) => i <= 3 ? { ...st, done: true } : st));
+            await new Promise(r => setTimeout(r, 200));
+
+            // Step 5
+            setLoadingSteps(s => s.map((st, i) => ({ ...st, done: true })));
+
+            // Save to context
+            dispatch({
+                type: 'SET_COMPANY_INFO',
+                payload: {
+                    companyName: data.companyName || tickerInput.toUpperCase(),
+                    ticker: data.ticker || tickerInput.toUpperCase(),
+                    currency: data.currency || 'USD',
+                    exchange: data.exchange || '',
+                    sector: data.sector || '',
+                    dataSource: 'api',
+                    sourceLabel: '🌐 API'
+                }
+            });
+
+            if (data.market) {
+                dispatch({
+                    type: 'SET_MARKET_DATA',
+                    payload: {
+                        currentPrice: data.market.currentPrice,
+                        sharesOutstanding: data.market.sharesOutstanding,
+                        marketCap: data.market.marketCap
+                    }
+                });
+            }
+
+            if (data.financials) {
+                dispatch({
+                    type: 'SET_ALL_YEARS_DATA',
+                    payload: {
+                        incomeStatement: data.financials.incomeStatement || {},
+                        balanceSheet: data.financials.balanceSheet || {},
+                        cashFlow: data.financials.cashFlow || {},
+                        availableYears: data.financials.availableYears || []
+                    }
+                });
+            }
+
+            // Navigate to DCF
+            await new Promise(r => setTimeout(r, 500));
+            router.push('/valuation/dcf');
+
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Wystąpił błąd podczas pobierania danych');
+            setIsLoading(false);
+            setLoadingSteps([]);
+        }
+    };
+
+    // Save manual data
+    const handleSaveManual = () => {
+        // Validation
+        if (!companyName.trim()) {
+            setError('Wpisz nazwę spółki');
+            return;
+        }
+
+        const revenue = parseFloat(years[0].revenue);
+        if (!revenue || revenue <= 0) {
+            setError('Wpisz przychody za ostatni rok');
+            return;
+        }
+
+        setError('');
+        const UNIT = 1_000_000; // Users enter in millions
+
+        // Helper to parse value
+        const parseVal = (val: string): number | null => {
+            const v = parseFloat(val);
+            if (isNaN(v)) return null;
+            return v * UNIT;
         };
 
-        localStorage.setItem('stochfin_company_data', JSON.stringify(data));
+        // Save company info
+        dispatch({
+            type: 'SET_COMPANY_INFO',
+            payload: {
+                companyName: companyName.trim(),
+                ticker: ticker.trim() || '',
+                currency: currency,
+                dataSource: 'manual',
+                sourceLabel: '✏️ Ręcznie'
+            }
+        });
+
+        // Save market data if provided
+        const price = parseFloat(stockPrice);
+        const shares = parseFloat(sharesMillions);
+        if (price && shares) {
+            dispatch({
+                type: 'SET_MARKET_DATA',
+                payload: {
+                    currentPrice: price,
+                    sharesOutstanding: shares * UNIT,
+                    marketCap: price * shares * UNIT
+                }
+            });
+        }
+
+        // Save financial data for each year
+        years.forEach(yearData => {
+            dispatch({
+                type: 'SET_FINANCIAL_DATA',
+                payload: {
+                    year: yearData.year,
+                    incomeStatement: {
+                        revenue: parseVal(yearData.revenue),
+                        costOfRevenue: parseVal(yearData.costOfRevenue),
+                        ebitda: parseVal(yearData.ebitda),
+                        depreciation: parseVal(yearData.depreciation),
+                        ebit: parseVal(yearData.ebit),
+                        interestExpense: parseVal(yearData.interestExpense),
+                        netIncome: parseVal(yearData.netIncome)
+                    },
+                    balanceSheet: {
+                        totalAssets: parseVal(yearData.totalAssets),
+                        currentAssets: parseVal(yearData.currentAssets),
+                        cash: parseVal(yearData.cash),
+                        inventory: parseVal(yearData.inventory),
+                        receivables: parseVal(yearData.receivables),
+                        totalLiabilities: parseVal(yearData.totalLiabilities),
+                        currentLiabilities: parseVal(yearData.currentLiabilities),
+                        longTermDebt: parseVal(yearData.longTermDebt),
+                        totalEquity: parseVal(yearData.totalEquity),
+                        retainedEarnings: parseVal(yearData.retainedEarnings)
+                    },
+                    cashFlow: {
+                        operatingCF: parseVal(yearData.operatingCF),
+                        capex: yearData.capex ? -Math.abs(parseFloat(yearData.capex)) * UNIT : null,
+                        freeCashFlow: (yearData.operatingCF && yearData.capex)
+                            ? parseFloat(yearData.operatingCF) * UNIT - Math.abs(parseFloat(yearData.capex)) * UNIT
+                            : null,
+                        dividendsPaid: yearData.dividendsPaid
+                            ? -Math.abs(parseFloat(yearData.dividendsPaid)) * UNIT
+                            : null
+                    }
+                }
+            });
+        });
+
         router.push('/valuation/dcf');
     };
 
-    // =============================================
-    // Render
-    // =============================================
+    // Tabs configuration
+    const tabs: { key: TabType; label: string; icon: string }[] = [
+        { key: 'income', label: 'Rachunek Zysków i Strat', icon: '💰' },
+        { key: 'balance', label: 'Bilans', icon: '📋' },
+        { key: 'cashflow', label: 'Cash Flow', icon: '💧' }
+    ];
 
     return (
         <div className="min-h-screen bg-[#030712] text-white overflow-hidden">
-            {/* Animated background */}
+            {/* Animated Background */}
             <div className="fixed inset-0 pointer-events-none">
-                <div className="absolute top-0 right-1/4 w-[800px] h-[800px] bg-cyan-500/5 rounded-full blur-[120px] animate-pulse" />
-                <div className="absolute bottom-0 left-1/4 w-[600px] h-[600px] bg-purple-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
-                <div className="absolute top-1/3 left-1/3 w-[400px] h-[400px] bg-emerald-500/3 rounded-full blur-[80px]" />
+                <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[120px] animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-purple-500/3 rounded-full blur-[150px]" />
             </div>
 
             {/* Header */}
             <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
-                <div className="max-w-5xl mx-auto px-8 py-8">
-                    <div className="flex items-center gap-4">
-                        <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center text-xl font-bold shadow-lg shadow-emerald-500/30">
-                            S
-                        </div>
-                        <div>
-                            <h1 className="text-2xl font-bold bg-gradient-to-r from-white via-gray-200 to-gray-400 bg-clip-text text-transparent">
-                                StochFin
-                            </h1>
-                            <p className="text-sm text-gray-500">Probabilistic Company Valuation</p>
-                        </div>
+                <div className="max-w-5xl mx-auto px-8 py-6">
+                    <div className="font-mono text-2xl font-bold bg-gradient-to-r from-emerald-400 to-cyan-400 bg-clip-text text-transparent">
+                        StochFin
+                    </div>
+                    <div className="text-xs text-gray-500 uppercase tracking-widest mt-1">
+                        Probabilistic Company Valuation
                     </div>
                 </div>
             </header>
 
             {/* Main Content */}
-            <main className="relative z-10 max-w-5xl mx-auto px-8 py-12">
-                <div className="text-center mb-12">
-                    <h2 className="text-3xl font-bold mb-3">Load Company Data</h2>
-                    <p className="text-gray-400 max-w-xl mx-auto">
-                        Choose how you&apos;d like to import financial data for valuation analysis
+            <main className="relative z-10 max-w-5xl mx-auto px-8 py-10">
+                {/* Title */}
+                <h1 className="text-3xl font-mono font-bold mb-2">
+                    Załaduj dane spółki
+                </h1>
+                <p className="text-gray-400 mb-8">
+                    Wybierz sposób importu danych finansowych
+                </p>
+
+                {/* Error Message */}
+                {error && (
+                    <div className="mb-6 p-4 rounded-xl bg-red-500/10 border border-red-500/30 text-red-400">
+                        ⚠️ {error}
+                    </div>
+                )}
+
+                {/* Section A: Fetch from Exchange */}
+                <GlassCard className="mb-6" glowColor="cyan">
+                    <div className="flex items-start gap-4 mb-4">
+                        <FeatureIcon emoji="🌐" color="cyan" />
+                        <div>
+                            <h2 className="text-xl font-semibold">Pobierz z giełdy</h2>
+                            <p className="text-sm text-gray-400">
+                                Automatycznie pobierz dane z NYSE, NASDAQ, WSE i więcej
+                            </p>
+                        </div>
+                    </div>
+
+                    <div className="flex gap-4">
+                        <input
+                            type="text"
+                            value={tickerInput}
+                            onChange={(e) => setTickerInput(e.target.value.toUpperCase())}
+                            placeholder="Wpisz ticker: AAPL, MSFT, CDR.WA..."
+                            disabled={isLoading}
+                            className="flex-1 px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-gray-500 focus:border-cyan-500/50 focus:outline-none"
+                            onKeyDown={(e) => e.key === 'Enter' && handleFetch()}
+                        />
+                        <button
+                            onClick={handleFetch}
+                            disabled={isLoading}
+                            className="px-6 py-3 rounded-xl bg-gradient-to-r from-cyan-600 to-blue-600 text-white font-medium hover:from-cyan-500 hover:to-blue-500 disabled:opacity-50 transition-all"
+                        >
+                            📡 Pobierz dane
+                        </button>
+                    </div>
+
+                    <p className="mt-3 text-xs text-gray-500">
+                        US: AAPL, MSFT, GOOGL • PL: CDR.WA, PKO.WA • DE: VOW3.DE
                     </p>
-                </div>
 
-                <div className="grid gap-6">
-                    {/* Card 1: API Fetch */}
-                    <GlassCard glowColor="cyan">
-                        <div className="flex items-start gap-5">
-                            <FeatureIcon emoji="🌐" color="cyan" />
-                            <div className="flex-1">
-                                <h3 className="text-xl font-semibold mb-1">Fetch from Exchange</h3>
-                                <p className="text-gray-400 text-sm mb-6">
-                                    Automatically download financial data from NYSE, NASDAQ, WSE, and more
-                                </p>
+                    {isLoading && <LoadingSteps steps={loadingSteps} />}
+                </GlassCard>
 
-                                <div className="flex gap-3 mb-4">
-                                    <PremiumInput
-                                        value={ticker}
-                                        onChange={e => setTicker(e.target.value)}
-                                        placeholder="Enter ticker: AAPL, MSFT, CDR.WA..."
-                                        disabled={apiLoading}
-                                        className="flex-1"
-                                    />
-                                    <PremiumButton
-                                        onClick={handleFetchFromAPI}
-                                        disabled={apiLoading || !ticker.trim()}
-                                        variant="primary"
-                                    >
-                                        {apiLoading ? (
-                                            <span className="flex items-center gap-2">
-                                                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                                                Loading...
-                                            </span>
-                                        ) : (
-                                            <span className="flex items-center gap-2">
-                                                📡 Fetch Data
-                                            </span>
-                                        )}
-                                    </PremiumButton>
-                                </div>
-
-                                <div className="flex gap-4 text-xs text-gray-500">
-                                    <span className="px-2 py-1 rounded-md bg-white/5">US: AAPL</span>
-                                    <span className="px-2 py-1 rounded-md bg-white/5">PL: CDR.WA</span>
-                                    <span className="px-2 py-1 rounded-md bg-white/5">DE: VOW3.DE</span>
-                                </div>
-
-                                {apiLoading && <LoadingSteps steps={apiSteps} />}
-
-                                {apiError && (
-                                    <div className="mt-6 p-4 bg-rose-500/10 border border-rose-500/20 rounded-xl text-rose-400 flex items-start gap-3">
-                                        <span className="text-xl">⚠️</span>
-                                        <div>
-                                            <div className="font-medium">Error</div>
-                                            <div className="text-sm text-rose-300/70">{apiError}</div>
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
+                {/* Section B: Upload Report */}
+                <GlassCard className="mb-6" glowColor="purple">
+                    <div className="flex items-start gap-4 mb-4">
+                        <FeatureIcon emoji="📄" color="purple" />
+                        <div>
+                            <h2 className="text-xl font-semibold">Wgraj raport</h2>
+                            <p className="text-sm text-gray-400">
+                                Wgraj sprawozdanie finansowe (PDF) lub plik Excel
+                            </p>
                         </div>
-                    </GlassCard>
+                    </div>
 
-                    {/* Card 2: File Upload */}
-                    <GlassCard glowColor="purple">
-                        <div className="flex items-start gap-5">
-                            <FeatureIcon emoji="📄" color="purple" />
-                            <div className="flex-1">
-                                <h3 className="text-xl font-semibold mb-1">Upload Report</h3>
-                                <p className="text-gray-400 text-sm mb-6">
-                                    Upload financial statement (PDF) or Excel workbook
-                                </p>
+                    <input
+                        type="file"
+                        ref={fileInputRef}
+                        onChange={handleFileSelect}
+                        accept=".pdf,.xlsx,.xls,.csv"
+                        className="hidden"
+                    />
 
-                                <div
-                                    onDrop={handleFileDrop}
-                                    onDragOver={e => e.preventDefault()}
-                                    className="border-2 border-dashed border-white/10 rounded-2xl p-10 text-center hover:border-purple-500/50 transition-all duration-300 cursor-pointer bg-white/[0.02] hover:bg-purple-500/5"
-                                >
-                                    <input
-                                        type="file"
-                                        accept=".pdf,.xlsx,.xls,.csv"
-                                        onChange={handleFileSelect}
-                                        className="hidden"
-                                        id="file-input"
-                                    />
-                                    <label htmlFor="file-input" className="cursor-pointer">
-                                        <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-500/20 to-pink-500/20 flex items-center justify-center">
-                                            <span className="text-3xl">📄</span>
-                                        </div>
-                                        <p className="text-gray-300 mb-1">
-                                            Drop file here or <span className="text-purple-400 hover:text-purple-300">browse</span>
-                                        </p>
-                                        <p className="text-gray-500 text-sm">
-                                            PDF, XLSX, XLS, CSV • Max 20 MB
-                                        </p>
-                                    </label>
-                                </div>
-
-                                {uploadLoading && (
-                                    <div className="mt-6">
-                                        <div className="flex justify-between text-sm mb-2">
-                                            <span className="text-gray-400">Processing {uploadedFile?.name}...</span>
-                                            <span className="text-purple-400 font-mono">{uploadProgress}%</span>
-                                        </div>
-                                        <div className="h-2 bg-white/5 rounded-full overflow-hidden">
-                                            <div
-                                                className="h-full bg-gradient-to-r from-purple-500 to-pink-500 transition-all duration-200"
-                                                style={{ width: `${uploadProgress}%` }}
-                                            />
-                                        </div>
-                                    </div>
-                                )}
-                            </div>
-                        </div>
-                    </GlassCard>
-
-                    {/* Card 3: Manual Input */}
-                    <GlassCard glowColor="amber">
-                        <div className="flex items-start gap-5">
-                            <FeatureIcon emoji="✏️" color="amber" />
-                            <div className="flex-1">
-                                <h3 className="text-xl font-semibold mb-1">Enter Manually</h3>
-                                <p className="text-gray-400 text-sm mb-6">
-                                    For private companies — enter financial data manually
-                                </p>
-
-                                <div className="space-y-6">
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div>
-                                            <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
-                                                Company Name
-                                            </label>
-                                            <PremiumInput
-                                                value={manualData.company_name}
-                                                onChange={e => setManualData(prev => ({ ...prev, company_name: e.target.value }))}
-                                                placeholder="e.g. My Company Ltd."
-                                            />
-                                        </div>
-                                        <div>
-                                            <label className="block text-xs text-gray-400 uppercase tracking-wider mb-2">
-                                                Currency
-                                            </label>
-                                            <select
-                                                value={manualData.currency}
-                                                onChange={e => setManualData(prev => ({ ...prev, currency: e.target.value }))}
-                                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white focus:border-white/30 focus:outline-none transition-all"
-                                            >
-                                                <option value="PLN">PLN</option>
-                                                <option value="USD">USD</option>
-                                                <option value="EUR">EUR</option>
-                                            </select>
-                                        </div>
-                                    </div>
-
-                                    {/* Data Table */}
-                                    <div className="overflow-hidden rounded-xl border border-white/10">
-                                        <table className="w-full text-sm">
-                                            <thead>
-                                                <tr className="bg-white/5">
-                                                    <th className="text-left py-3 px-4 text-gray-400 font-medium">Metric</th>
-                                                    {manualData.years.map(y => (
-                                                        <th key={y} className="text-center py-3 px-4 text-gray-400 font-medium">{y}</th>
-                                                    ))}
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {[
-                                                    { key: 'revenue', label: 'Revenue (M)', icon: '💰' },
-                                                    { key: 'ebitda', label: 'EBITDA (M)', icon: '📈' },
-                                                    { key: 'net_income', label: 'Net Income (M)', icon: '💵' }
-                                                ].map(row => (
-                                                    <tr key={row.key} className="border-t border-white/5 hover:bg-white/[0.02] transition-colors">
-                                                        <td className="py-3 px-4 text-gray-300 flex items-center gap-2">
-                                                            <span>{row.icon}</span>
-                                                            {row.label}
-                                                        </td>
-                                                        {manualData.years.map(y => (
-                                                            <td key={y} className="py-3 px-4 text-center">
-                                                                <input
-                                                                    type="number"
-                                                                    value={(manualData as any)[row.key][y] || ''}
-                                                                    onChange={e => setManualData(prev => ({
-                                                                        ...prev,
-                                                                        [row.key]: { ...(prev as any)[row.key], [y]: e.target.value }
-                                                                    }))}
-                                                                    className="w-24 px-3 py-2 bg-black/30 border border-white/10 rounded-lg text-center text-white font-mono focus:border-amber-500/50 focus:outline-none transition-all"
-                                                                    placeholder="0"
-                                                                />
-                                                            </td>
-                                                        ))}
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </div>
-
-                                    <PremiumButton
-                                        onClick={handleManualSave}
-                                        disabled={!manualData.company_name}
-                                        variant="gradient"
-                                        size="lg"
-                                        className="w-full"
-                                    >
-                                        💾 Save and Continue to Valuation
-                                    </PremiumButton>
-                                </div>
-                            </div>
-                        </div>
-                    </GlassCard>
-                </div>
-
-                {/* Quick Links */}
-                <div className="mt-12 text-center">
-                    <p className="text-gray-500 text-sm mb-4">Already have data loaded?</p>
-                    <button
-                        onClick={() => router.push('/valuation/dcf')}
-                        className="text-emerald-400 hover:text-emerald-300 text-sm font-medium transition-colors"
+                    <div
+                        onDragOver={handleDragOver}
+                        onDragLeave={handleDragLeave}
+                        onDrop={handleDrop}
+                        onClick={() => fileInputRef.current?.click()}
+                        className={`
+                            border-2 border-dashed rounded-xl p-10 text-center transition-all cursor-pointer
+                            ${isDragging
+                                ? 'border-purple-500 bg-purple-500/10'
+                                : 'border-white/10 hover:border-purple-500/30 hover:bg-purple-500/5'
+                            }
+                            ${uploadStatus === 'uploading' ? 'pointer-events-none opacity-60' : ''}
+                        `}
                     >
-                        Go to DCF Valuation →
+                        {uploadStatus === 'uploading' ? (
+                            <>
+                                <div className="w-8 h-8 mx-auto mb-3 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                                <div className="text-purple-400 font-medium">
+                                    Przetwarzanie pliku...
+                                </div>
+                                <div className="text-xs text-gray-500 mt-2">
+                                    AI analizuje dane finansowe
+                                </div>
+                            </>
+                        ) : uploadStatus === 'success' ? (
+                            <>
+                                <div className="text-4xl mb-2">✅</div>
+                                <div className="text-emerald-400 font-medium">
+                                    Dane załadowane pomyślnie!
+                                </div>
+                                <div className="text-xs text-gray-500 mt-2">
+                                    Przechodzę do analizy...
+                                </div>
+                            </>
+                        ) : (
+                            <>
+                                <div className="text-4xl mb-2">📁</div>
+                                <div className="text-gray-400">
+                                    {isDragging ? 'Upuść plik tutaj!' : 'Przeciągnij plik lub kliknij aby wybrać'}
+                                </div>
+                                <div className="text-xs text-gray-500 mt-2">
+                                    PDF, XLSX, XLS, CSV • Max 20 MB
+                                </div>
+                            </>
+                        )}
+                    </div>
+
+                    {selectedFile && uploadStatus !== 'success' && (
+                        <div className="mt-4 p-3 rounded-lg bg-purple-500/10 border border-purple-500/20 flex items-center gap-3">
+                            <span className="text-2xl">📄</span>
+                            <div className="flex-1 min-w-0">
+                                <div className="text-sm font-medium truncate">{selectedFile.name}</div>
+                                <div className="text-xs text-gray-500">
+                                    {(selectedFile.size / 1024 / 1024).toFixed(2)} MB
+                                </div>
+                            </div>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); setSelectedFile(null); setError(''); }}
+                                className="text-gray-400 hover:text-white p-1"
+                            >
+                                ✕
+                            </button>
+                        </div>
+                    )}
+
+                    {uploadStatus === 'error' && (
+                        <div className="mt-4 p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
+                            ⚠️ {error || 'Błąd przetwarzania pliku'}
+                        </div>
+                    )}
+                </GlassCard>
+
+                {/* Section C: Manual Entry */}
+                <GlassCard className="mb-6" glowColor="amber">
+                    <div className="flex items-start gap-4 mb-6">
+                        <FeatureIcon emoji="✏️" color="amber" />
+                        <div>
+                            <h2 className="text-xl font-semibold">Wprowadź ręcznie</h2>
+                            <p className="text-sm text-gray-400">
+                                Dla spółek prywatnych — wpisz dane finansowe
+                            </p>
+                        </div>
+                    </div>
+
+                    {/* Company Info Row */}
+                    <div className="grid grid-cols-3 gap-4 mb-6">
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-2">Nazwa spółki</label>
+                            <input
+                                type="text"
+                                value={companyName}
+                                onChange={(e) => setCompanyName(e.target.value)}
+                                placeholder="np. Firma Sp. z o.o."
+                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-2">Ticker</label>
+                            <input
+                                type="text"
+                                value={ticker}
+                                onChange={(e) => setTicker(e.target.value.toUpperCase())}
+                                placeholder="np. ABC"
+                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-2">Waluta</label>
+                            <select
+                                value={currency}
+                                onChange={(e) => setCurrency(e.target.value)}
+                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white focus:border-amber-500/50 focus:outline-none"
+                            >
+                                <option value="PLN">PLN</option>
+                                <option value="USD">USD</option>
+                                <option value="EUR">EUR</option>
+                                <option value="GBP">GBP</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    {/* Market Data Row (Optional) */}
+                    <div className="grid grid-cols-2 gap-4 mb-6">
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-2">Cena akcji (opcjonalne)</label>
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={stockPrice}
+                                onChange={(e) => setStockPrice(e.target.value)}
+                                placeholder="np. 125.50"
+                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 uppercase mb-2">Liczba akcji (mln)</label>
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={sharesMillions}
+                                onChange={(e) => setSharesMillions(e.target.value)}
+                                placeholder="np. 15.2"
+                                className="w-full px-4 py-3 rounded-xl bg-black/30 border border-white/10 text-white placeholder-gray-500 focus:border-amber-500/50 focus:outline-none"
+                            />
+                        </div>
+                    </div>
+                    <p className="text-xs text-gray-500 mb-6 -mt-4">
+                        Opcjonalne — potrzebne do wyceny per share
+                    </p>
+
+                    {/* Financial Data Tabs */}
+                    <div className="flex gap-2 mb-6 border-b border-white/10">
+                        {tabs.map(tab => (
+                            <button
+                                key={tab.key}
+                                onClick={() => setActiveTab(tab.key)}
+                                className={`
+                                    px-4 py-3 text-sm font-medium transition-all
+                                    ${activeTab === tab.key
+                                        ? 'border-b-2 border-amber-500 text-white'
+                                        : 'text-gray-500 hover:text-gray-300'
+                                    }
+                                `}
+                            >
+                                {tab.icon} {tab.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Year Headers */}
+                    <div className="grid grid-cols-4 gap-4 mb-4">
+                        <div className="text-xs text-gray-500 uppercase">Pole</div>
+                        {years.map((y, idx) => (
+                            <input
+                                key={idx}
+                                type="text"
+                                value={y.year}
+                                onChange={(e) => updateYearData(idx, 'year', e.target.value)}
+                                className="text-center px-3 py-2 rounded-lg bg-black/30 border border-white/10 text-white font-mono text-sm"
+                            />
+                        ))}
+                    </div>
+
+                    {/* Income Statement Tab */}
+                    {activeTab === 'income' && (
+                        <div className="space-y-1">
+                            <NumberInputRow label="Przychody (Revenue)" values={years} field="revenue" onChange={(i, v) => updateYearData(i, 'revenue', v)} />
+                            <NumberInputRow label="Koszt sprzedaży" values={years} field="costOfRevenue" onChange={(i, v) => updateYearData(i, 'costOfRevenue', v)} />
+                            <NumberInputRow label="EBITDA" values={years} field="ebitda" onChange={(i, v) => updateYearData(i, 'ebitda', v)} />
+                            <NumberInputRow label="Amortyzacja (D&A)" values={years} field="depreciation" onChange={(i, v) => updateYearData(i, 'depreciation', v)} />
+                            <NumberInputRow label="EBIT" values={years} field="ebit" onChange={(i, v) => updateYearData(i, 'ebit', v)} />
+                            <NumberInputRow label="Koszty odsetkowe" values={years} field="interestExpense" onChange={(i, v) => updateYearData(i, 'interestExpense', v)} />
+                            <NumberInputRow label="Zysk netto" values={years} field="netIncome" onChange={(i, v) => updateYearData(i, 'netIncome', v)} />
+                        </div>
+                    )}
+
+                    {/* Balance Sheet Tab */}
+                    {activeTab === 'balance' && (
+                        <div className="space-y-1">
+                            <NumberInputRow label="Aktywa ogółem" values={years} field="totalAssets" onChange={(i, v) => updateYearData(i, 'totalAssets', v)} />
+                            <NumberInputRow label="Aktywa obrotowe" values={years} field="currentAssets" onChange={(i, v) => updateYearData(i, 'currentAssets', v)} />
+                            <NumberInputRow label="Środki pieniężne" values={years} field="cash" onChange={(i, v) => updateYearData(i, 'cash', v)} />
+                            <NumberInputRow label="Zapasy" values={years} field="inventory" onChange={(i, v) => updateYearData(i, 'inventory', v)} />
+                            <NumberInputRow label="Należności" values={years} field="receivables" onChange={(i, v) => updateYearData(i, 'receivables', v)} />
+                            <NumberInputRow label="Zobowiązania ogółem" values={years} field="totalLiabilities" onChange={(i, v) => updateYearData(i, 'totalLiabilities', v)} />
+                            <NumberInputRow label="Zobowiązania krótkoterm." values={years} field="currentLiabilities" onChange={(i, v) => updateYearData(i, 'currentLiabilities', v)} />
+                            <NumberInputRow label="Dług długoterminowy" values={years} field="longTermDebt" onChange={(i, v) => updateYearData(i, 'longTermDebt', v)} />
+                            <NumberInputRow label="Kapitał własny" values={years} field="totalEquity" onChange={(i, v) => updateYearData(i, 'totalEquity', v)} />
+                            <NumberInputRow label="Zysk zatrzymany" values={years} field="retainedEarnings" onChange={(i, v) => updateYearData(i, 'retainedEarnings', v)} />
+                        </div>
+                    )}
+
+                    {/* Cash Flow Tab */}
+                    {activeTab === 'cashflow' && (
+                        <div className="space-y-1">
+                            <NumberInputRow label="CF z działalności oper." values={years} field="operatingCF" onChange={(i, v) => updateYearData(i, 'operatingCF', v)} />
+                            <NumberInputRow label="CAPEX (wartość dodatnia)" values={years} field="capex" onChange={(i, v) => updateYearData(i, 'capex', v)} />
+                            <NumberInputRow label="Dywidendy wypłacone" values={years} field="dividendsPaid" onChange={(i, v) => updateYearData(i, 'dividendsPaid', v)} />
+                        </div>
+                    )}
+
+                    <p className="text-xs text-gray-500 mt-4 mb-6">
+                        Wartości w milionach {currency}
+                    </p>
+
+                    {/* Info Box */}
+                    <div className="bg-cyan-500/5 border-l-4 border-cyan-500 rounded-r-xl p-4 mb-6">
+                        <div className="text-sm font-medium text-cyan-400 mb-2">
+                            ℹ️ Jakie dane potrzebujesz?
+                        </div>
+                        <div className="text-sm text-gray-400 space-y-1">
+                            <div>⚡ <strong>MINIMUM (DCF):</strong> Revenue, EBITDA, Net Income (1 tab)</div>
+                            <div>📊 <strong>Health Check:</strong> + Bilans (2 taby)</div>
+                            <div>💎 <strong>PEŁNA ANALIZA:</strong> + Cash Flow (3 taby)</div>
+                        </div>
+                        <div className="text-xs text-gray-500 mt-3">
+                            Im więcej danych wpiszesz, tym więcej funkcji odblokujesz.
+                        </div>
+                    </div>
+
+                    {/* Save Button */}
+                    <button
+                        onClick={handleSaveManual}
+                        className="w-full py-4 rounded-xl bg-gradient-to-r from-emerald-600 to-cyan-600 text-white font-bold text-lg hover:from-emerald-500 hover:to-cyan-500 hover:shadow-lg hover:shadow-emerald-500/20 transition-all"
+                    >
+                        💾 Zapisz i przejdź do analizy
+                    </button>
+                </GlassCard>
+
+                {/* Footer Link */}
+                <div className="text-center mt-8">
+                    <button
+                        onClick={() => router.push('/landing')}
+                        className="text-gray-500 hover:text-gray-300 text-sm transition-colors"
+                    >
+                        ← Powrót na stronę główną
                     </button>
                 </div>
             </main>

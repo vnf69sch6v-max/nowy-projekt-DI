@@ -1,4 +1,5 @@
 import { ToastProvider } from '@/components/ui/Toast';
+import Sidebar from '@/components/valuation/Sidebar';
 
 export default function ValuationLayout({
     children,
@@ -7,7 +8,13 @@ export default function ValuationLayout({
 }) {
     return (
         <ToastProvider>
-            {children}
+            <div style={{ display: 'flex', minHeight: '100vh' }}>
+                <Sidebar />
+                <main style={{ flex: 1, marginLeft: '240px' }}>
+                    {children}
+                </main>
+            </div>
         </ToastProvider>
     );
 }
+
