@@ -20,6 +20,7 @@ const navItems: NavItem[] = [
     { icon: '📊', label: 'Health Check', href: '/valuation/health' },
     { icon: '💰', label: 'Wycena DCF', href: '/valuation/dcf' },
     { icon: '📈', label: 'Porównawcza', href: '/valuation/comps' },
+    { icon: '🎯', label: 'Peer Benchmark', href: '/valuation/benchmark' },
     { icon: '🔥', label: 'Wrażliwość', href: '/valuation/sensitivity' },
     { icon: '💎', label: 'Dywidendy', href: '/valuation/dividends' },
     { icon: '🏗️', label: 'Kapitał', href: '/valuation/capital' },
@@ -67,8 +68,8 @@ export function Sidebar() {
                         key={item.href}
                         href={item.href}
                         className={`w-10 h-10 flex items-center justify-center rounded-lg mb-2 text-lg transition-colors ${pathname === item.href
-                                ? 'bg-emerald-600/20 text-emerald-400'
-                                : 'text-gray-500 hover:bg-white/5 hover:text-white'
+                            ? 'bg-emerald-600/20 text-emerald-400'
+                            : 'text-gray-500 hover:bg-white/5 hover:text-white'
                             }`}
                         title={item.label}
                     >
@@ -143,8 +144,8 @@ export function Sidebar() {
                             key={item.href}
                             href={item.href}
                             className={`flex items-center gap-3 px-3 py-2.5 rounded-lg mb-1 transition-all ${isActive
-                                    ? 'bg-emerald-600/20 text-emerald-400 border-l-3 border-emerald-400'
-                                    : 'text-gray-400 hover:bg-white/5 hover:text-white'
+                                ? 'bg-emerald-600/20 text-emerald-400 border-l-3 border-emerald-400'
+                                : 'text-gray-400 hover:bg-white/5 hover:text-white'
                                 }`}
                             style={isActive ? { borderLeftWidth: '3px' } : {}}
                         >
