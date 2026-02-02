@@ -244,9 +244,42 @@ export default function LoadDataPage() {
     const [uploadStatus, setUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle');
     const [isDragging, setIsDragging] = useState(false);
 
-    // Update year data
+    // Update year data with auto-calculation of EBITDA/EBIT
     const updateYearData = useCallback((yearIdx: number, field: keyof YearData, value: string) => {
-        setYears(prev => prev.map((y, i) => i === yearIdx ? { ...y, [field]: value } : y));
+        setYears(prev => prev.map((y, i) => {
+            if (i !== yearIdx) return y;
+
+            const updated = { ...y, [field]: value };
+
+            // Auto-calculate EBITDA and EBIT when related fields change
+            // Only if user hasn't manually entered EBITDA/EBIT
+            if (['netIncome', 'interestExpense', 'depreciation'].includes(field)) {
+                const netIncome = parseFloat(updated.netIncome) || 0;
+                const interest = Math.abs(parseFloat(updated.interestExpense) || 0);
+                const depreciation = Math.abs(parseFloat(updated.depreciation) || 0);
+
+                // Only auto-calculate if not manually set or if it was 0/""/undefined
+                if (!updated.ebit || updated.ebit === '' || updated.ebit === '0') {
+                    // EBIT ≈ Net Income + Interest + estimated tax (~25% of interest)
+                    const estimatedTax = interest * 0.25;
+                    const calculatedEbit = netIncome + interest + estimatedTax;
+                    if (calculatedEbit > 0) {
+                        updated.ebit = calculatedEbit.toFixed(1);
+                    }
+                }
+
+                if (!updated.ebitda || updated.ebitda === '' || updated.ebitda === '0') {
+                    // EBITDA = EBIT + Depreciation
+                    const ebitValue = parseFloat(updated.ebit) || 0;
+                    const calculatedEbitda = ebitValue + depreciation;
+                    if (calculatedEbitda > 0) {
+                        updated.ebitda = calculatedEbitda.toFixed(1);
+                    }
+                }
+            }
+
+            return updated;
+        }));
     }, []);
 
     // File upload handlers
