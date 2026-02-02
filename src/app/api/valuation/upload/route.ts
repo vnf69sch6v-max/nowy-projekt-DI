@@ -1,11 +1,11 @@
 // =============================================
 // StochFin API: Upload & Process Financial Documents
-// Uses Gemini multimodal to handle PDFs directly
+// Uses Gemini API directly (server-side) for PDF processing
 // =============================================
 
 import { NextRequest, NextResponse } from 'next/server';
 import * as XLSX from 'xlsx';
-import { getGeminiModel } from '@/lib/ai/gemini';
+import { GoogleGenerativeAI } from '@google/generative-ai';
 
 // =============================================
 // Types
@@ -80,7 +80,23 @@ function parseExcel(buffer: ArrayBuffer): string {
 }
 
 async function extractFromPDF(buffer: ArrayBuffer): Promise<ExtractedFinancials> {
-    const model = getGeminiModel('gemini-2.0-flash');
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error('GEMINI_API_KEY not set');
+        return {
+            companyName: null,
+            ticker: null,
+            currency: 'PLN',
+            years: [],
+            incomeStatement: {},
+            balanceSheet: {},
+            cashFlow: {},
+            warnings: ['Server configuration error: GEMINI_API_KEY not set']
+        };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // Convert buffer to base64
     const base64Data = Buffer.from(buffer).toString('base64');
@@ -121,7 +137,23 @@ async function extractFromPDF(buffer: ArrayBuffer): Promise<ExtractedFinancials>
 }
 
 async function extractFromText(text: string): Promise<ExtractedFinancials> {
-    const model = getGeminiModel('gemini-2.0-flash');
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+        console.error('GEMINI_API_KEY not set');
+        return {
+            companyName: null,
+            ticker: null,
+            currency: 'PLN',
+            years: [],
+            incomeStatement: {},
+            balanceSheet: {},
+            cashFlow: {},
+            warnings: ['Server configuration error: GEMINI_API_KEY not set']
+        };
+    }
+
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
 
     // Truncate if too long
     const maxLength = 25000;
