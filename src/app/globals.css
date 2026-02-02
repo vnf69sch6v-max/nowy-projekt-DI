@@ -676,3 +676,206 @@ h6 {
     transform: translateY(0);
   }
 }
+
+/* =============================================
+   Page Transitions
+   ============================================= */
+
+.page-enter {
+  animation: pageEnter 0.4s ease-out;
+}
+
+@keyframes pageEnter {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.stagger-1 {
+  animation-delay: 0.05s;
+}
+
+.stagger-2 {
+  animation-delay: 0.1s;
+}
+
+.stagger-3 {
+  animation-delay: 0.15s;
+}
+
+.stagger-4 {
+  animation-delay: 0.2s;
+}
+
+.stagger-5 {
+  animation-delay: 0.25s;
+}
+
+/* =============================================
+   Premium Fintech Animations
+   ============================================= */
+
+.glow-pulse {
+  animation: glowPulse 2s ease-in-out infinite;
+}
+
+@keyframes glowPulse {
+
+  0%,
+  100% {
+    box-shadow: 0 0 20px rgba(16, 185, 129, 0.3);
+  }
+
+  50% {
+    box-shadow: 0 0 40px rgba(16, 185, 129, 0.6);
+  }
+}
+
+.number-tick {
+  animation: numberTick 0.3s ease-out;
+}
+
+@keyframes numberTick {
+  0% {
+    transform: translateY(-100%);
+    opacity: 0;
+  }
+
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.gauge-fill {
+  animation: gaugeFill 1s ease-out forwards;
+  stroke-dasharray: 0, 100;
+}
+
+@keyframes gaugeFill {
+  to {
+    stroke-dasharray: var(--gauge-value, 50), 100;
+  }
+}
+
+/* =============================================
+   Mobile Responsiveness
+   ============================================= */
+
+@media (max-width: 768px) {
+  html {
+    font-size: 14px;
+  }
+
+  h1 {
+    font-size: 1.75rem;
+  }
+
+  h2 {
+    font-size: 1.5rem;
+  }
+
+  h3 {
+    font-size: 1.25rem;
+  }
+
+  .card {
+    padding: 1rem;
+  }
+
+  /* Stack grids on mobile */
+  .grid-cols-2,
+  .grid-cols-3,
+  .grid-cols-4 {
+    grid-template-columns: 1fr;
+  }
+
+  /* Responsive tables */
+  .scenario-table {
+    font-size: 0.75rem;
+  }
+
+  .scenario-table th,
+  .scenario-table td {
+    padding: 0.5rem;
+  }
+
+  /* Hide sidebar on mobile */
+  .sidebar-desktop {
+    display: none;
+  }
+
+  /* Mobile navigation */
+  .mobile-nav {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: hsl(var(--surface-1));
+    border-top: 1px solid hsl(var(--border-subtle));
+    padding: 0.5rem;
+    display: flex;
+    justify-content: space-around;
+    z-index: 100;
+  }
+
+  .mobile-nav-item {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 0.5rem;
+    color: hsl(var(--text-muted));
+    font-size: 0.625rem;
+    text-decoration: none;
+  }
+
+  .mobile-nav-item.active {
+    color: hsl(142 76% 36%);
+  }
+
+  .mobile-nav-item svg,
+  .mobile-nav-item span:first-child {
+    font-size: 1.25rem;
+    margin-bottom: 0.25rem;
+  }
+}
+
+@media (min-width: 769px) {
+  .mobile-nav {
+    display: none;
+  }
+}
+
+/* =============================================
+   Touch Interactions
+   ============================================= */
+
+@media (hover: none) {
+  .btn:active {
+    transform: scale(0.97);
+  }
+
+  .card:active {
+    transform: scale(0.99);
+  }
+}
+
+/* =============================================
+   Safe Area (iPhone notch)
+   ============================================= */
+
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .mobile-nav {
+    padding-bottom: calc(0.5rem + env(safe-area-inset-bottom));
+  }
+
+  body {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
