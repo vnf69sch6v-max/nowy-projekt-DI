@@ -87,12 +87,25 @@ async function fetchFromFMP(ticker: string): Promise<CompanyFinancials> {
         throw new Error(`FMP API error: ${errorText}`);
     }
 
+    // Helper to safely parse JSON, handling premium-required text responses
+    const safeParseJson = async (res: Response, endpointName: string) => {
+        const text = await res.text();
+        if (text.includes('Premium') || text.includes('Special Endpoint')) {
+            throw new Error(`PREMIUM_REQUIRED:${endpointName}`);
+        }
+        try {
+            return JSON.parse(text);
+        } catch {
+            throw new Error(`Invalid JSON from ${endpointName}: ${text.substring(0, 100)}`);
+        }
+    };
+
     const [profile, income, balance, cashFlow, quote] = await Promise.all([
-        profileRes.json(),
-        incomeRes.json(),
-        balanceRes.json(),
-        cashFlowRes.json(),
-        quoteRes.json()
+        safeParseJson(profileRes, 'profile'),
+        safeParseJson(incomeRes, 'income-statement'),
+        safeParseJson(balanceRes, 'balance-sheet'),
+        safeParseJson(cashFlowRes, 'cash-flow'),
+        safeParseJson(quoteRes, 'quote')
     ]);
 
     // Handle not found
@@ -344,6 +357,15 @@ export async function POST(req: NextRequest) {
                         suggestion: 'Check the ticker symbol or try a different exchange suffix (e.g., .WA for Warsaw)'
                     },
                     { status: 404 }
+                );
+            } else if (error.message.startsWith('PREMIUM_REQUIRED')) {
+                const endpoint = error.message.split(':')[1] || 'financial data';
+                return NextResponse.json(
+                    {
+                        error: `Dane finansowe dla ${normalizedTicker} wymagają premium FMP`,
+                        suggestion: 'Spółki spoza USA (GPW, LSE, etc.) wymagają płatnego planu FMP. Wgraj raport PDF/Excel lub wprowadź dane ręcznie.'
+                    },
+                    { status: 402 }
                 );
             } else {
                 throw error;
