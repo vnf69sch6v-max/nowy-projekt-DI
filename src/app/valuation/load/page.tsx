@@ -390,14 +390,24 @@ export default function LoadDataPage() {
             await new Promise(r => setTimeout(r, 300));
             setLoadingSteps(s => s.map((st, i) => i === 0 ? { ...st, done: true } : st));
 
-            // Fetch from API
-            const response = await fetch(`/api/financials/fetch?ticker=${encodeURIComponent(tickerInput.trim())}`);
+            // Fetch from API - use POST method
+            const response = await fetch('/api/financials/fetch', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ticker: tickerInput.trim() })
+            });
 
             if (!response.ok) {
-                throw new Error('Nie znaleziono tickera. Sprawdź pisownię.');
+                const errData = await response.json().catch(() => ({}));
+                throw new Error(errData.error || 'Nie znaleziono tickera. Sprawdź pisownię.');
             }
 
-            const data = await response.json();
+            const result = await response.json();
+            const data = result.data;
+
+            if (!data) {
+                throw new Error('Nie udało się pobrać danych finansowych');
+            }
 
             // Step 2
             setLoadingSteps(s => s.map((st, i) => i <= 1 ? { ...st, done: true } : st));
@@ -414,39 +424,77 @@ export default function LoadDataPage() {
             // Step 5
             setLoadingSteps(s => s.map((st, i) => ({ ...st, done: true })));
 
-            // Save to context
+            // Save to context - map FMP response structure
             dispatch({
                 type: 'SET_COMPANY_INFO',
                 payload: {
-                    companyName: data.companyName || tickerInput.toUpperCase(),
+                    companyName: data.company_name || tickerInput.toUpperCase(),
                     ticker: data.ticker || tickerInput.toUpperCase(),
                     currency: data.currency || 'USD',
                     exchange: data.exchange || '',
                     sector: data.sector || '',
                     dataSource: 'api',
-                    sourceLabel: '🌐 API'
+                    sourceLabel: '🌐 FMP API'
                 }
             });
 
-            if (data.market) {
+            if (data.current_price || data.shares_outstanding) {
                 dispatch({
                     type: 'SET_MARKET_DATA',
                     payload: {
-                        currentPrice: data.market.currentPrice,
-                        sharesOutstanding: data.market.sharesOutstanding,
-                        marketCap: data.market.marketCap
+                        currentPrice: data.current_price,
+                        sharesOutstanding: data.shares_outstanding,
+                        marketCap: data.market_cap
                     }
                 });
             }
 
-            if (data.financials) {
+            // Map FMP statements to context format
+            if (data.statements) {
+                const periods = data.statements.income_statement?.periods || [];
+                const incomeData = data.statements.income_statement?.data || {};
+                const balanceData = data.statements.balance_sheet?.data || {};
+                const cashFlowData = data.statements.cash_flow_statement?.data || {};
+
+                // Build year-keyed objects for context
+                const incomeStatement: Record<string, Record<string, number | null>> = {};
+                const balanceSheet: Record<string, Record<string, number | null>> = {};
+                const cashFlow: Record<string, Record<string, number | null>> = {};
+
+                for (const year of periods) {
+                    incomeStatement[year] = {
+                        revenue: incomeData.revenue?.[year] ?? null,
+                        costOfRevenue: incomeData.cost_of_revenue?.[year] ?? null,
+                        grossProfit: incomeData.gross_profit?.[year] ?? null,
+                        ebitda: incomeData.ebitda?.[year] ?? null,
+                        depreciation: incomeData.depreciation?.[year] ?? null,
+                        ebit: incomeData.ebit?.[year] ?? null,
+                        interestExpense: incomeData.interest_expense?.[year] ?? null,
+                        netIncome: incomeData.net_income?.[year] ?? null,
+                    };
+                    balanceSheet[year] = {
+                        totalAssets: balanceData.total_assets?.[year] ?? null,
+                        currentAssets: balanceData.current_assets?.[year] ?? null,
+                        cash: balanceData.cash?.[year] ?? null,
+                        totalLiabilities: balanceData.total_liabilities?.[year] ?? null,
+                        currentLiabilities: balanceData.current_liabilities?.[year] ?? null,
+                        longTermDebt: balanceData.long_term_debt?.[year] ?? null,
+                        totalEquity: balanceData.total_equity?.[year] ?? null,
+                    };
+                    cashFlow[year] = {
+                        operatingCF: cashFlowData.operating_cf?.[year] ?? null,
+                        capex: cashFlowData.capex?.[year] ?? null,
+                        freeCashFlow: cashFlowData.free_cash_flow?.[year] ?? null,
+                    };
+                }
+
                 dispatch({
                     type: 'SET_ALL_YEARS_DATA',
                     payload: {
-                        incomeStatement: data.financials.incomeStatement || {},
-                        balanceSheet: data.financials.balanceSheet || {},
-                        cashFlow: data.financials.cashFlow || {},
-                        availableYears: data.financials.availableYears || []
+                        incomeStatement,
+                        balanceSheet,
+                        cashFlow,
+                        availableYears: periods
                     }
                 });
             }
