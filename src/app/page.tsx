@@ -123,10 +123,10 @@ export default function StochFinDashboard() {
           <nav className="hidden md:flex items-center gap-1 p-1 bg-[hsl(var(--surface-1))] rounded-xl">
             {[
               { href: '/', label: 'Dashboard', active: true },
+              { href: '/valuation/load', label: 'Wycena' },
               { href: '/models', label: 'Modele' },
               { href: '/simulations', label: 'Symulacje' },
               { href: '/events', label: 'EventProb' },
-              { href: '/backtesting', label: 'Backtesting' },
             ].map((item) => (
               <Link key={item.href} href={item.href}>
                 <button className={cn(
@@ -264,6 +264,26 @@ export default function StochFinDashboard() {
                 <Link href="/models/new">
                   <Button className="w-full bg-gradient-to-r from-[hsl(var(--accent-primary))] to-violet-500 hover:opacity-90" leftIcon={<Play className="w-4 h-4" />}>
                     Rozpocznij
+                  </Button>
+                </Link>
+              </CardContent>
+            </Card>
+
+            {/* Valuation CTA */}
+            <Card className="overflow-hidden bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border-emerald-500/20">
+              <CardContent className="pt-6">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-500 flex items-center justify-center shadow-lg shadow-emerald-500/25">
+                    <Target className="w-6 h-6 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-semibold">Wycena spółki</h3>
+                    <p className="text-xs text-[hsl(var(--text-muted))]">DCF, Football Field, Risk</p>
+                  </div>
+                </div>
+                <Link href="/valuation/load">
+                  <Button className="w-full bg-gradient-to-r from-emerald-500 to-teal-500 hover:opacity-90" leftIcon={<BarChart3 className="w-4 h-4" />}>
+                    Otwórz Wycenę
                   </Button>
                 </Link>
               </CardContent>
