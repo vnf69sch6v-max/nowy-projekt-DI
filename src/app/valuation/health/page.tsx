@@ -155,9 +155,9 @@ function AltmanZBar({ result }: { result: AltmanResult }) {
     };
 
     return (
-        <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
+        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">🔬</span>
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-cyan-500 to-blue-600 flex items-center justify-center text-lg">🔬</span>
                 <h3 className="text-lg font-semibold">ALTMAN Z-SCORE</h3>
             </div>
             <p className="text-sm text-gray-500 mb-4">Prawdopodobieństwo bankructwa w ciągu 2 lat</p>
@@ -185,8 +185,8 @@ function AltmanZBar({ result }: { result: AltmanResult }) {
 
             {/* Score */}
             <div className={`text-center py-3 rounded-lg ${result.zone === 'safe' ? 'bg-emerald-500/20 text-emerald-400' :
-                    result.zone === 'grey' ? 'bg-amber-500/20 text-amber-400' :
-                        'bg-rose-500/20 text-rose-400'
+                result.zone === 'grey' ? 'bg-amber-500/20 text-amber-400' :
+                    'bg-rose-500/20 text-rose-400'
                 }`}>
                 <span className="text-2xl font-mono font-bold">Z = {result.score}</span>
                 <span className="ml-2 text-sm">"{result.label}"</span>
@@ -241,27 +241,27 @@ function AltmanZBar({ result }: { result: AltmanResult }) {
 
 function PiotroskiFScore({ result }: { result: PiotrostkiResult }) {
     return (
-        <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
+        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">📊</span>
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-600 flex items-center justify-center text-lg">📊</span>
                 <h3 className="text-lg font-semibold">PIOTROSKI F-SCORE</h3>
             </div>
             <p className="text-sm text-gray-500 mb-4">Siła finansowa spółki (0-9)</p>
 
             {/* Score Display */}
             <div className={`text-center py-4 rounded-lg mb-4 ${result.score >= 7 ? 'bg-emerald-500/20' :
-                    result.score >= 4 ? 'bg-amber-500/20' :
-                        'bg-rose-500/20'
+                result.score >= 4 ? 'bg-amber-500/20' :
+                    'bg-rose-500/20'
                 }`}>
                 <span className={`text-4xl font-mono font-bold ${result.score >= 7 ? 'text-emerald-400' :
-                        result.score >= 4 ? 'text-amber-400' :
-                            'text-rose-400'
+                    result.score >= 4 ? 'text-amber-400' :
+                        'text-rose-400'
                     }`}>
                     {result.score}/9
                 </span>
                 <div className={`text-sm mt-1 ${result.score >= 7 ? 'text-emerald-400' :
-                        result.score >= 4 ? 'text-amber-400' :
-                            'text-rose-400'
+                    result.score >= 4 ? 'text-amber-400' :
+                        'text-rose-400'
                     }`}>
                     {result.label}
                 </div>
@@ -273,8 +273,8 @@ function PiotroskiFScore({ result }: { result: PiotrostkiResult }) {
                     <div
                         key={c.id}
                         className={`flex items-center justify-between p-2 rounded border-l-3 ${c.pass
-                                ? 'bg-emerald-500/10 border-emerald-500'
-                                : 'bg-rose-500/10 border-rose-500'
+                            ? 'bg-emerald-500/10 border-emerald-500'
+                            : 'bg-rose-500/10 border-rose-500'
                             }`}
                         style={{ borderLeftWidth: '3px' }}
                     >
@@ -329,7 +329,7 @@ function RatioCard({
                 <div className={`w-2 h-2 rounded-full ${statusColors[status as keyof typeof statusColors] || 'bg-gray-500'}`} />
             </div>
             <div className={`text-xs mt-1 ${status === 'excellent' || status === 'ok' ? 'text-emerald-400' :
-                    status === 'warning' ? 'text-amber-400' : 'text-rose-400'
+                status === 'warning' ? 'text-amber-400' : 'text-rose-400'
                 }`}>
                 {statusLabels[status as keyof typeof statusLabels] || status}
             </div>
@@ -346,9 +346,9 @@ function DuPontTree({ result }: { result: DuPontResult }) {
     const d = result.decomposition;
 
     return (
-        <div className="bg-[#111827] rounded-xl border border-white/5 p-6">
+        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-6 shadow-xl">
             <div className="flex items-center gap-2 mb-2">
-                <span className="text-xl">🔍</span>
+                <span className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center text-lg">🔍</span>
                 <h3 className="text-lg font-semibold">ANALIZA DUPONT (Dekompozycja ROE)</h3>
             </div>
             <p className="text-sm text-gray-500 mb-6">Skąd pochodzi zwrot na kapitale?</p>
@@ -473,9 +473,16 @@ export default function HealthDashboardPage() {
     const sourceType = data.source === 'fmp' || data.source === 'alpha_vantage' ? 'api' : 'pdf';
 
     return (
-        <div className="min-h-screen bg-[#06090F] text-white">
+        <div className="min-h-screen bg-[#030712] text-white overflow-hidden">
+            {/* Animated background */}
+            <div className="fixed inset-0 pointer-events-none">
+                <div className="absolute top-0 left-1/4 w-[800px] h-[800px] bg-emerald-500/5 rounded-full blur-[120px] animate-pulse" />
+                <div className="absolute bottom-0 right-1/4 w-[600px] h-[600px] bg-cyan-500/5 rounded-full blur-[100px] animate-pulse" style={{ animationDelay: '1s' }} />
+                <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[1000px] h-[1000px] bg-purple-500/3 rounded-full blur-[150px]" />
+            </div>
+
             {/* Header */}
-            <header className="border-b border-white/5 bg-[#0A0E17]">
+            <header className="relative z-10 border-b border-white/5 bg-black/20 backdrop-blur-xl">
                 <div className="max-w-7xl mx-auto px-8 py-6">
                     <button onClick={() => router.push('/valuation/dcf')} className="text-gray-500 hover:text-white text-sm mb-2">
                         ← Powrót do DCF
@@ -501,7 +508,7 @@ export default function HealthDashboardPage() {
                 ) : health ? (
                     <>
                         {/* Hero Section: Overall Score */}
-                        <div className="bg-[#111827] rounded-xl border border-white/5 p-8 mb-8">
+                        <div className="bg-gradient-to-br from-white/[0.08] to-white/[0.02] backdrop-blur-xl rounded-2xl border border-white/[0.08] p-8 mb-8 shadow-xl">
                             <HealthGauge score={health.overall_score} />
                             <p className="text-center text-gray-500 text-sm mt-4 max-w-md mx-auto">
                                 Ocena zagregowana z: Altman Z-Score, Piotroski F-Score, wskaźniki finansowe, analiza cash flow
@@ -612,8 +619,8 @@ export default function HealthDashboardPage() {
                         {/* Beneish M-Score */}
                         {health.components.beneish_m.score !== null && (
                             <div className={`mt-6 p-4 rounded-lg border ${health.components.beneish_m.is_manipulator
-                                    ? 'bg-rose-500/10 border-rose-500/30'
-                                    : 'bg-emerald-500/10 border-emerald-500/30'
+                                ? 'bg-rose-500/10 border-rose-500/30'
+                                : 'bg-emerald-500/10 border-emerald-500/30'
                                 }`}>
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">
@@ -624,8 +631,8 @@ export default function HealthDashboardPage() {
                                             Beneish M-Score: {health.components.beneish_m.score}
                                         </div>
                                         <div className={`text-sm ${health.components.beneish_m.is_manipulator
-                                                ? 'text-rose-400'
-                                                : 'text-emerald-400'
+                                            ? 'text-rose-400'
+                                            : 'text-emerald-400'
                                             }`}>
                                             {health.components.beneish_m.label}
                                         </div>
@@ -641,8 +648,8 @@ export default function HealthDashboardPage() {
                                 <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
                                     <div className="text-xs text-gray-500 uppercase">Accrual Ratio</div>
                                     <div className={`text-2xl font-mono ${health.components.cashflow_quality.accrual_ratio < 0
-                                            ? 'text-emerald-400'
-                                            : 'text-amber-400'
+                                        ? 'text-emerald-400'
+                                        : 'text-amber-400'
                                         }`}>
                                         {(health.components.cashflow_quality.accrual_ratio * 100).toFixed(1)}%
                                     </div>
@@ -655,8 +662,8 @@ export default function HealthDashboardPage() {
                                 <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
                                     <div className="text-xs text-gray-500 uppercase">OCF / Net Income</div>
                                     <div className={`text-2xl font-mono ${health.components.cashflow_quality.ocf_to_ni_ratio > 1
-                                            ? 'text-emerald-400'
-                                            : 'text-amber-400'
+                                        ? 'text-emerald-400'
+                                        : 'text-amber-400'
                                         }`}>
                                         {health.components.cashflow_quality.ocf_to_ni_ratio}x
                                     </div>
@@ -669,8 +676,8 @@ export default function HealthDashboardPage() {
                                 <div className="bg-[#0A0E17] rounded-lg p-4 text-center">
                                     <div className="text-xs text-gray-500 uppercase">Free Cash Flow</div>
                                     <div className={`text-2xl font-mono ${health.components.cashflow_quality.fcf_positive
-                                            ? 'text-emerald-400'
-                                            : 'text-rose-400'
+                                        ? 'text-emerald-400'
+                                        : 'text-rose-400'
                                         }`}>
                                         {health.components.cashflow_quality.fcf_positive ? '✓ Dodatni' : '✗ Ujemny'}
                                     </div>
